@@ -1,0 +1,45 @@
+{
+  "name": "優見補習班",
+  "name_en": "YouJian Tutoring",
+  "location": "天母/士林",
+  "target_grades": "國小國中",
+  "audience": "家長",
+  "voice": "親切專業，像鄰居大姊姊聊天",
+  "voice_guidelines": {
+    "tone": "溫暖、鼓勵、有專業底蘊但不說教",
+    "perspective": "以家長的角度出發，理解育兒的辛苦",
+    "language_style": "口語化但不隨便，偶爾用在地化的天母/士林元素",
+    "avoid": ["太正式的學術用語", "過度推銷感", "負面恐嚇式行銷", "簡體中文"]
+  },
+  "topics": [
+    {
+      "id": "entrance_exam",
+      "name": "升學資訊",
+      "description": "國中會考、升學制度、免試入學、特色招生等"
+    },
+    {
+      "id": "parenting",
+      "name": "親子教養",
+      "description": "親子溝通、情緒管理、品格教育、青春期應對等"
+    },
+    {
+      "id": "learning_methods",
+      "name": "學習方法",
+      "description": "讀書技巧、時間管理、學習動機、考試準備等"
+    },
+    {
+      "id": "edu_policy",
+      "name": "教育政策趨勢",
+      "description": "課綱調整、雙語政策、AI教育、國際教育趨勢等"
+    },
+    {
+      "id": "local_school",
+      "name": "在地學區資訊",
+      "description": "天母/士林學區動態、學校特色、在地活動等"
+    }
+  ],
+  "hashtags": {
+    "brand": ["#優見補習班", "#天母補習班", "#士林補習班"],
+    "general": ["#國小", "#國中", "#升學", "#親子教養", "#學習方法"]
+  }
+}

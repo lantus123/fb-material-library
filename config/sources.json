@@ -1,0 +1,113 @@
+{
+  "auto_crawl": [
+    {
+      "name": "Edutopia",
+      "url": "https://www.edutopia.org",
+      "feed_url": "https://www.edutopia.org/rss.xml",
+      "language": "en",
+      "focus": ["教學方法", "學習方法", "親子教養"]
+    },
+    {
+      "name": "Parenting Science",
+      "url": "https://parentingscience.com",
+      "feed_url": null,
+      "language": "en",
+      "focus": ["親子教養", "學習方法"]
+    },
+    {
+      "name": "Big Life Journal",
+      "url": "https://biglifejournal.com/blogs/blog",
+      "feed_url": null,
+      "language": "en",
+      "focus": ["親子教養", "學習方法"]
+    },
+    {
+      "name": "The Learning Scientists",
+      "url": "https://www.learningscientists.org/blog",
+      "feed_url": null,
+      "language": "en",
+      "focus": ["學習方法"]
+    },
+    {
+      "name": "MindShift (KQED)",
+      "url": "https://www.kqed.org/mindshift",
+      "feed_url": "https://www.kqed.org/mindshift/feed",
+      "language": "en",
+      "focus": ["學習方法", "教育政策趨勢"]
+    },
+    {
+      "name": "Cult of Pedagogy",
+      "url": "https://www.cultofpedagogy.com",
+      "feed_url": "https://www.cultofpedagogy.com/feed/",
+      "language": "en",
+      "focus": ["教學方法", "學習方法"]
+    },
+    {
+      "name": "TeachThought",
+      "url": "https://www.teachthought.com",
+      "feed_url": "https://www.teachthought.com/feed/",
+      "language": "en",
+      "focus": ["教學方法", "學習方法", "教育政策趨勢"]
+    },
+    {
+      "name": "Janet Lansbury",
+      "url": "https://www.janetlansbury.com",
+      "feed_url": "https://www.janetlansbury.com/feed/",
+      "language": "en",
+      "focus": ["親子教養"]
+    },
+    {
+      "name": "Maggie Dent (Australia)",
+      "url": "https://www.maggiedent.com/blog/",
+      "feed_url": null,
+      "language": "en",
+      "focus": ["親子教養", "學習方法"]
+    },
+    {
+      "name": "Kimchi Mamas (Korea)",
+      "url": "https://kimchimamas.com",
+      "feed_url": null,
+      "language": "en",
+      "focus": ["親子教養", "在地學區資訊"]
+    }
+  ],
+  "manual_feed": [
+    {
+      "name": "PTT 教育相關看板",
+      "type": "ptt",
+      "boards": ["Teacher", "studyteacher", "Education"],
+      "language": "zh-TW",
+      "notes": "需手動貼上連結或內文"
+    },
+    {
+      "name": "Facebook 連結",
+      "type": "facebook",
+      "language": "zh-TW",
+      "notes": "手動貼上 FB 貼文連結或截圖"
+    },
+    {
+      "name": "X / Twitter",
+      "type": "twitter",
+      "language": "mixed",
+      "notes": "手動貼上推文連結或內文"
+    },
+    {
+      "name": "Threads",
+      "type": "threads",
+      "language": "mixed",
+      "notes": "手動貼上 Threads 貼文連結"
+    },
+    {
+      "name": "新聞網站",
+      "type": "news",
+      "sources": [
+        "親子天下 (parenting.com.tw)",
+        "聯合報教育版",
+        "自由時報生活版",
+        "教育部全球資訊網"
+      ],
+      "language": "zh-TW",
+      "notes": "手動貼上新聞連結"
+    }
+  ]
+}
