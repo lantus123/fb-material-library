@@ -27,14 +27,16 @@ fb-material-library/
 ├── apps-script/
 │   └── Code.gs              # Google Apps Script（部署在 Google Sheets 上）
 ├── config/
-│   ├── sources.json          # 爬取來源清單
+│   ├── sources.json          # 爬取來源清單（含中英文來源）
 │   └── brand.json            # 品牌設定（語氣、主題、hashtag）
 ├── prompts/
 │   ├── analysis.md           # 文章分析 prompt 模板
 │   └── copywriting.md        # 貼文生成 prompt 模板
 ├── scripts/
-│   ├── crawl.py              # 爬取 + 分析腳本
+│   ├── crawl.py              # 爬取 + 分析腳本（含重複偵測）
+│   ├── crawl_scheduled.sh    # 排程爬取包裝腳本（cron 用）
 │   └── generate_post.py      # 貼文生成腳本
+├── logs/                     # 排程爬取 log（.gitignore）
 ├── .env.example              # 環境變數範本
 ├── .gitignore
 ├── requirements.txt          # Python 依賴
@@ -57,6 +59,9 @@ Base URL 存在 `.env` 的 `APPS_SCRIPT_API_URL`
 - `?action=getStats` — 取得統計資料
   - 回傳：`{ total, thisWeek, highRelevance, byTopic, lastUpdated }`
 
+- `?action=getExistingUrls` — 取得已存的所有 URL 和標題（重複偵測用）
+  - 回傳：`{ urls: [...], titles: [...] }`
+
 **POST 請求：**
 
 - `action: "addMaterial"` — 新增素材
@@ -66,6 +71,10 @@ Base URL 存在 `.env` 的 `APPS_SCRIPT_API_URL`
 - `action: "markUsed"` — 標記素材為已使用
   - 欄位：row（列號）
   - 回傳：`{ success: true }`
+
+- `action: "sendReport"` — 寄送爬取報告 email
+  - 欄位：email, subject, body（HTML）
+  - 回傳：`{ success: true, message: "報告已寄出" }`
 
 ## 如何執行
 
@@ -88,6 +97,22 @@ python scripts/crawl.py --days 14
 
 # 手動爬取單一網址
 python scripts/crawl.py --url https://example.com/article "來源名稱"
+
+# 強制略過重複偵測
+python scripts/crawl.py --force
+
+# 排程模式（完成後寄 email 報告）
+python scripts/crawl.py --scheduled
+```
+
+### 排程設定
+
+```bash
+# 編輯 crontab
+crontab -e
+
+# 加入以下行（每週一、四早上 8 點自動爬取）
+0 8 * * 1,4 /home/r19911219/fb-material-library/scripts/crawl_scheduled.sh
 ```
 
 ### 生成貼文
@@ -126,9 +151,9 @@ python scripts/generate_post.py --stats
 
 ## 待開發功能
 
-- [ ] 排程自動爬取（Cloud Scheduler 或 cron）
-- [ ] 支援中文來源的爬取（親子天下等）
+- [x] 排程自動爬取（cron + shell wrapper + flock + email 通知）
+- [x] 支援中文來源的爬取（親子天下、翻轉教育、未來Family、教育部、聯合報）
+- [x] 素材去重機制（URL 正規化 + 標題相似度 + Apps Script 端防重複）
 - [ ] 貼文排程發佈（Facebook Graph API）
-- [ ] 素材去重機制（避免重複爬取同一篇文章）
 - [ ] Web UI（用 Streamlit 或 Flask 做管理介面）
 - [ ] 圖片素材生成

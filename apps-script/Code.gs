@@ -29,8 +29,11 @@ function doGet(e) {
     case 'getStats':
       result = handleGetStats();
       break;
+    case 'getExistingUrls':
+      result = handleGetExistingUrls();
+      break;
     default:
-      result = { error: 'Unknown action', availableActions: ['getMaterials', 'getStats'] };
+      result = { error: 'Unknown action', availableActions: ['getMaterials', 'getStats', 'getExistingUrls'] };
   }
   return ContentService
     .createTextOutput(JSON.stringify(result))
@@ -54,6 +57,9 @@ function doPost(e) {
     case 'markUsed':
       result = handleMarkUsed(data.row);
       break;
+    case 'sendReport':
+      result = handleSendReport(data);
+      break;
     default:
       result = { success: false, error: 'Unknown action' };
   }
@@ -65,6 +71,18 @@ function doPost(e) {
 function handleAddMaterial(data) {
   try {
     const sheet = initSheet();
+    // 重複偵測：檢查 source_url 是否已存在
+    const sourceUrl = (data.source_url || '').replace(/\/+$/, '');
+    if (sourceUrl) {
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        const existingUrls = sheet.getRange(2, 9, lastRow - 1, 1).getValues().flat();
+        const normalizedExisting = existingUrls.map(u => (u || '').toString().replace(/\/+$/, ''));
+        if (normalizedExisting.includes(sourceUrl)) {
+          return { success: false, error: 'duplicate', message: '此 URL 已存在素材庫中' };
+        }
+      }
+    }
     const row = [
       data.curated_at || new Date().toISOString(),
       data.title || '',
@@ -167,6 +185,36 @@ function handleMarkUsed(rowNumber) {
     const sheet = initSheet();
     sheet.getRange(rowNumber, 12).setValue('Y');
     return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function handleGetExistingUrls() {
+  try {
+    const sheet = initSheet();
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { urls: [], titles: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+    const urls = data.map(row => (row[8] || '').toString());
+    const titles = data.map(row => (row[1] || '').toString());
+    return { urls: urls, titles: titles };
+  } catch (error) {
+    return { urls: [], titles: [], error: error.message };
+  }
+}
+
+function handleSendReport(data) {
+  try {
+    const recipient = data.email || 'r19911219@gmail.com';
+    const subject = data.subject || 'FB素材庫 — 爬取報告';
+    const body = data.body || '（無內容）';
+    MailApp.sendEmail({
+      to: recipient,
+      subject: subject,
+      htmlBody: body,
+    });
+    return { success: true, message: '報告已寄出' };
   } catch (error) {
     return { success: false, error: error.message };
   }

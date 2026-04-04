@@ -62,6 +62,8 @@ python scripts/generate_post.py --quick
 | `python scripts/crawl.py --days 14` | 自動爬取（最近14天） |
 | `python scripts/crawl.py --url <URL>` | 手動爬取單一網址 |
 | `python scripts/crawl.py --url <URL> 來源名稱` | 手動爬取並指定來源 |
+| `python scripts/crawl.py --force` | 強制略過重複偵測 |
+| `python scripts/crawl.py --scheduled` | 排程模式（完成後寄 email 報告） |
 
 ### 貼文生成 (generate_post.py)
 
@@ -75,7 +77,7 @@ python scripts/generate_post.py --quick
 
 ## 爬取來源
 
-### 自動爬取（RSS）
+### 自動爬取 — 英文來源（RSS）
 
 | 來源 | 焦點 |
 |------|------|
@@ -90,6 +92,16 @@ python scripts/generate_post.py --quick
 | Maggie Dent | 親子教養、學習方法 |
 | Kimchi Mamas | 親子教養、亞洲觀點 |
 
+### 自動爬取 — 中文來源
+
+| 來源 | 焦點 |
+|------|------|
+| 親子天下 | 親子教養、學習方法、升學資訊 |
+| 翻轉教育 | 教學方法、教育政策趨勢 |
+| 未來Family | 親子教養、教育政策趨勢 |
+| 教育部全球資訊網 | 教育政策趨勢、升學資訊 |
+| 聯合報教育版 | 升學資訊、在地學區資訊 |
+
 ### 手動輸入
 
 支援 PTT、Facebook、X/Twitter、Threads、新聞網站等來源的手動輸入。
@@ -101,6 +113,34 @@ Python 爬蟲 → Claude API 分析 → Apps Script API → Google Sheets
                                                         ↓
                    FB 貼文 ← Claude API 生成 ← 讀取素材庫
 ```
+
+## 自動排程
+
+系統可透過 cron 自動執行爬取，完成後寄送 email 報告。
+
+```bash
+# 編輯 crontab
+crontab -e
+
+# 加入以下行（每週一、四早上 8 點自動爬取）
+0 8 * * 1,4 /home/r19911219/fb-material-library/scripts/crawl_scheduled.sh
+```
+
+排程功能包含：
+- **flock 鎖定**：防止重疊執行
+- **log 記錄**：每次執行產生獨立 log 檔
+- **log 清理**：自動刪除 30 天以上的舊 log
+- **email 報告**：爬取完成後寄送摘要至指定信箱
+
+## 重複偵測
+
+系統在爬取時自動偵測重複文章，避免浪費 Claude API 額度：
+
+1. **URL 比對**：正規化 URL 後比對已存素材
+2. **標題相似度**：使用 SequenceMatcher 比對標題（閾值 85%）
+3. **Apps Script 端防護**：寫入時再次檢查 URL 是否已存在
+
+使用 `--force` 參數可跳過重複偵測。
 
 ## 授權
 

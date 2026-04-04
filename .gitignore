@@ -6,5 +6,6 @@ venv/
 node_modules/
 .DS_Store
 *.log
+logs/
 .idea/
 .vscode/

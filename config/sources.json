@@ -5,70 +5,126 @@
       "url": "https://www.edutopia.org",
       "feed_url": "https://www.edutopia.org/rss.xml",
       "language": "en",
-      "focus": ["教學方法", "學習方法", "親子教養"]
+      "focus": ["教學方法", "學習方法", "親子教養"],
+      "crawl_type": "rss"
     },
     {
       "name": "Parenting Science",
       "url": "https://parentingscience.com",
       "feed_url": null,
       "language": "en",
-      "focus": ["親子教養", "學習方法"]
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
     },
     {
       "name": "Big Life Journal",
       "url": "https://biglifejournal.com/blogs/blog",
       "feed_url": null,
       "language": "en",
-      "focus": ["親子教養", "學習方法"]
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
     },
     {
       "name": "The Learning Scientists",
       "url": "https://www.learningscientists.org/blog",
       "feed_url": null,
       "language": "en",
-      "focus": ["學習方法"]
+      "focus": ["學習方法"],
+      "crawl_type": "rss"
     },
     {
       "name": "MindShift (KQED)",
       "url": "https://www.kqed.org/mindshift",
       "feed_url": "https://www.kqed.org/mindshift/feed",
       "language": "en",
-      "focus": ["學習方法", "教育政策趨勢"]
+      "focus": ["學習方法", "教育政策趨勢"],
+      "crawl_type": "rss"
     },
     {
       "name": "Cult of Pedagogy",
       "url": "https://www.cultofpedagogy.com",
       "feed_url": "https://www.cultofpedagogy.com/feed/",
       "language": "en",
-      "focus": ["教學方法", "學習方法"]
+      "focus": ["教學方法", "學習方法"],
+      "crawl_type": "rss"
     },
     {
       "name": "TeachThought",
       "url": "https://www.teachthought.com",
       "feed_url": "https://www.teachthought.com/feed/",
       "language": "en",
-      "focus": ["教學方法", "學習方法", "教育政策趨勢"]
+      "focus": ["教學方法", "學習方法", "教育政策趨勢"],
+      "crawl_type": "rss"
     },
     {
       "name": "Janet Lansbury",
       "url": "https://www.janetlansbury.com",
       "feed_url": "https://www.janetlansbury.com/feed/",
       "language": "en",
-      "focus": ["親子教養"]
+      "focus": ["親子教養"],
+      "crawl_type": "rss"
     },
     {
       "name": "Maggie Dent (Australia)",
       "url": "https://www.maggiedent.com/blog/",
       "feed_url": null,
       "language": "en",
-      "focus": ["親子教養", "學習方法"]
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
     },
     {
       "name": "Kimchi Mamas (Korea)",
       "url": "https://kimchimamas.com",
       "feed_url": null,
       "language": "en",
-      "focus": ["親子教養", "在地學區資訊"]
+      "focus": ["親子教養", "在地學區資訊"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "親子天下",
+      "url": "https://www.parenting.com.tw",
+      "feed_url": "https://www.parenting.com.tw/feed/",
+      "language": "zh-TW",
+      "focus": ["親子教養", "學習方法", "教育政策趨勢", "升學資訊"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "翻轉教育",
+      "url": "https://flipedu.parenting.com.tw",
+      "feed_url": null,
+      "language": "zh-TW",
+      "focus": ["教學方法", "學習方法", "教育政策趨勢"],
+      "crawl_type": "scrape",
+      "listing_url": "https://flipedu.parenting.com.tw/article",
+      "link_selector": "a[href*='/article/']",
+      "content_selector": "article"
+    },
+    {
+      "name": "未來Family",
+      "url": "https://futureparenting.cwgv.com.tw",
+      "feed_url": null,
+      "language": "zh-TW",
+      "focus": ["親子教養", "教育政策趨勢"],
+      "crawl_type": "scrape",
+      "listing_url": "https://futureparenting.cwgv.com.tw/family/content",
+      "link_selector": "a[href*='/content/']",
+      "content_selector": "article"
+    },
+    {
+      "name": "教育部全球資訊網",
+      "url": "https://www.edu.tw",
+      "feed_url": "https://www.edu.tw/News_Plan_Content.aspx?n=D33B55D537402BAA&s=rss",
+      "language": "zh-TW",
+      "focus": ["教育政策趨勢", "升學資訊"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "聯合報教育版",
+      "url": "https://udn.com/news/cate/6885",
+      "feed_url": "https://udn.com/rssfeed/news/2/6885",
+      "language": "zh-TW",
+      "focus": ["升學資訊", "教育政策趨勢", "在地學區資訊"],
+      "crawl_type": "rss"
     }
   ],
   "manual_feed": [
