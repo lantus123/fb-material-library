@@ -11,6 +11,11 @@ const POST_HEADERS = [
   '分享數', '觸及人數', '最後更新'
 ];
 
+const STYLE_SHEET_NAME = '寫法範本';
+const STYLE_HEADERS = [
+  '收錄時間', '標題', '原文內容', '寫法亮點', '來源URL', '標籤'
+];
+
 function initSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -41,6 +46,21 @@ function initPostSheet() {
   return sheet;
 }
 
+function initStyleSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(STYLE_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(STYLE_SHEET_NAME);
+  }
+  const firstRow = sheet.getRange(1, 1, 1, STYLE_HEADERS.length).getValues()[0];
+  if (firstRow[0] !== STYLE_HEADERS[0]) {
+    sheet.getRange(1, 1, 1, STYLE_HEADERS.length).setValues([STYLE_HEADERS]);
+    sheet.getRange(1, 1, 1, STYLE_HEADERS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function doGet(e) {
   const action = e.parameter.action;
   let result;
@@ -60,8 +80,11 @@ function doGet(e) {
     case 'getTopPosts':
       result = handleGetTopPosts(e.parameter);
       break;
+    case 'getStyleExamples':
+      result = handleGetStyleExamples(e.parameter);
+      break;
     default:
-      result = { error: 'Unknown action', availableActions: ['getMaterials', 'getStats', 'getExistingUrls', 'getPostRecords', 'getTopPosts'] };
+      result = { error: 'Unknown action', availableActions: ['getMaterials', 'getStats', 'getExistingUrls', 'getPostRecords', 'getTopPosts', 'getStyleExamples'] };
   }
   return ContentService
     .createTextOutput(JSON.stringify(result))
@@ -99,6 +122,9 @@ function doPost(e) {
       break;
     case 'updatePostContent':
       result = handleUpdatePostContent(data);
+      break;
+    case 'addStyleExample':
+      result = handleAddStyleExample(data);
       break;
     default:
       result = { success: false, error: 'Unknown action' };
@@ -417,5 +443,49 @@ function handleUpdatePostContent(data) {
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+}
+
+// ─── 寫法範本 handlers ──────────────────────────────────────
+
+function handleAddStyleExample(data) {
+  try {
+    const sheet = initStyleSheet();
+    const row = [
+      data.created_at || new Date().toISOString(),
+      data.title || '',
+      data.content || '',
+      data.highlights || '',
+      data.source_url || '',
+      (data.tags || []).join(', ')
+    ];
+    sheet.appendRow(row);
+    const lastRow = sheet.getLastRow();
+    return { success: true, row: lastRow, total: lastRow - 1 };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function handleGetStyleExamples(params) {
+  try {
+    const sheet = initStyleSheet();
+    const lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { examples: [] };
+    const data = sheet.getRange(2, 1, lastRow - 1, STYLE_HEADERS.length).getValues();
+    const limit = parseInt(params.limit) || 20;
+    let examples = data.map((row, idx) => ({
+      row_number: idx + 2,
+      created_at: row[0],
+      title: row[1],
+      content: row[2],
+      highlights: row[3],
+      source_url: row[4],
+      tags: row[5] ? row[5].split(', ') : []
+    }));
+    examples.reverse();
+    return { examples: examples.slice(0, limit) };
+  } catch (error) {
+    return { examples: [], error: error.message };
   }
 }

@@ -10,7 +10,7 @@ from pathlib import Path
 from google import genai
 from dotenv import load_dotenv
 
-from scripts.sheets_api import _get_secret, get_top_posts
+from scripts.sheets_api import _get_secret, get_top_posts, get_style_examples
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -62,6 +62,25 @@ def _format_top_posts(top_posts: list[dict]) -> str:
         sections.append(
             f"### 參考貼文 {i}（類型：{post.get('post_type', '一般')}，"
             f"評分：{post.get('rating', 0)}/5，{metrics_str}）\n{content}"
+        )
+
+    return "\n\n".join(sections)
+
+
+def _format_style_examples(examples: list[dict]) -> str:
+    """將寫法範本格式化為 prompt 內容。"""
+    if not examples:
+        return ""
+
+    sections = []
+    for i, ex in enumerate(examples, 1):
+        content = ex.get("content", "")[:300]
+        if len(ex.get("content", "")) > 300:
+            content += "..."
+        sections.append(
+            f"### 範本 {i}：{ex.get('title', '無標題')}\n"
+            f"**寫法亮點：** {ex.get('highlights', '')}\n"
+            f"**內容：**\n{content}"
         )
 
     return "\n\n".join(sections)
@@ -159,6 +178,24 @@ def build_prompt(
         import re
         prompt = re.sub(
             r'\{\{#if top_posts\}\}.*?\{\{/if\}\}',
+            '',
+            prompt,
+            flags=re.DOTALL,
+        )
+
+    # 注入寫法範本
+    try:
+        style_examples = get_style_examples(limit=3)
+    except Exception:
+        style_examples = []
+
+    if style_examples:
+        style_text = _format_style_examples(style_examples)
+        prompt = prompt.replace("{{style_examples}}", style_text)
+    else:
+        import re
+        prompt = re.sub(
+            r'\{\{#if style_examples\}\}.*?\{\{/if style_examples\}\}',
             '',
             prompt,
             flags=re.DOTALL,

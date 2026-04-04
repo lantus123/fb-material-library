@@ -138,3 +138,29 @@ def update_post_content(row: int, post_content: str) -> bool:
         "post_content": post_content,
     })
     return result.get("success", False)
+
+
+# ─── 寫法範本 ──────────────────────────────────────────────
+
+def add_style_example(
+    title: str,
+    content: str,
+    highlights: str,
+    source_url: str = "",
+    tags: list[str] | None = None,
+) -> dict:
+    """新增寫法範本。"""
+    return _post({
+        "action": "addStyleExample",
+        "title": title,
+        "content": content,
+        "highlights": highlights,
+        "source_url": source_url,
+        "tags": tags or [],
+    })
+
+
+def get_style_examples(limit: int = 20) -> list[dict]:
+    """取得寫法範本。"""
+    data = _get({"action": "getStyleExamples", "limit": str(limit)})
+    return data.get("examples", [])
