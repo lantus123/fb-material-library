@@ -113,6 +113,70 @@
       "crawl_type": "rss"
     },
     {
+      "name": "Pragmatic Mom",
+      "url": "https://www.pragmaticmom.com",
+      "feed_url": "https://www.pragmaticmom.com/feed",
+      "language": "en",
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Bicultural Mama",
+      "url": "https://biculturalmama.com",
+      "feed_url": "https://biculturalmama.com/feed",
+      "language": "en",
+      "focus": ["親子教養"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Feminist Asian Dad",
+      "url": "https://feministasiandad.com",
+      "feed_url": "https://feministasiandad.com/feed",
+      "language": "en",
+      "focus": ["親子教養"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Positive Discipline",
+      "url": "https://www.positivediscipline.com",
+      "feed_url": "https://www.positivediscipline.com/feed",
+      "language": "en",
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Positive Parenting Solutions",
+      "url": "https://www.positiveparentingsolutions.com",
+      "feed_url": "https://www.positiveparentingsolutions.com/feed",
+      "language": "en",
+      "focus": ["親子教養"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Raising Lifelong Learners",
+      "url": "https://raisinglifelonglearners.com",
+      "feed_url": "https://raisinglifelonglearners.com/feed",
+      "language": "en",
+      "focus": ["學習方法", "親子教養"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "The Artful Parent",
+      "url": "https://artfulparent.com",
+      "feed_url": "https://artfulparent.com/feed",
+      "language": "en",
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Multicultural Kid Blogs",
+      "url": "https://multiculturalkidblogs.com",
+      "feed_url": "https://multiculturalkidblogs.com/feed",
+      "language": "en",
+      "focus": ["親子教養", "學習方法"],
+      "crawl_type": "rss"
+    },
+    {
       "name": "親子天下",
       "url": "https://www.parenting.com.tw",
       "feed_url": null,
