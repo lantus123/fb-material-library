@@ -11,7 +11,17 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-APPS_SCRIPT_API_URL = os.getenv("APPS_SCRIPT_API_URL")
+
+def _get_secret(key: str, default: str = "") -> str:
+    """從 Streamlit secrets 或環境變數取得設定值。"""
+    try:
+        import streamlit as st
+        return st.secrets.get(key, os.getenv(key, default))
+    except Exception:
+        return os.getenv(key, default)
+
+
+APPS_SCRIPT_API_URL = _get_secret("APPS_SCRIPT_API_URL")
 REQUEST_TIMEOUT = 30
 
 

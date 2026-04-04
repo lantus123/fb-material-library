@@ -10,12 +10,12 @@ from pathlib import Path
 from google import genai
 from dotenv import load_dotenv
 
-from scripts.sheets_api import get_top_posts
+from scripts.sheets_api import _get_secret, get_top_posts
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_API_KEY = _get_secret("GEMINI_API_KEY")
+GEMINI_MODEL = _get_secret("GEMINI_MODEL", "gemini-2.5-flash")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COPYWRITING_PROMPT_PATH = PROJECT_ROOT / "prompts" / "copywriting.md"
@@ -67,21 +67,78 @@ def _format_top_posts(top_posts: list[dict]) -> str:
     return "\n\n".join(sections)
 
 
+def _format_materials(materials: list[dict]) -> str:
+    """將多篇素材格式化為 prompt 內容。"""
+    sections = []
+    for i, m in enumerate(materials, 1):
+        sections.append(
+            f"### 素材 {i}\n"
+            f"- **標題**: {m.get('title', '')}\n"
+            f"- **摘要**: {m.get('summary', '')}\n"
+            f"- **主題標籤**: {', '.join(m.get('topics', []))}\n"
+            f"- **可用角度**: {' | '.join(m.get('angles', []))}\n"
+            f"- **關鍵事實**: {' | '.join(m.get('key_facts', []))}\n"
+            f"- **來源**: {m.get('source_title', '')}"
+        )
+    return "\n\n".join(sections)
+
+
 def build_prompt(
-    material: dict,
+    material: dict | list[dict],
     post_type: str = "",
     top_posts: list[dict] | None = None,
 ) -> str:
-    """組裝完整的貼文生成 prompt，含回饋範例注入。"""
+    """組裝完整的貼文生成 prompt，含回饋範例注入。支援單篇或多篇素材。"""
     template = load_copywriting_prompt()
 
-    # 替換素材資料
-    prompt = template.replace("{{title}}", material.get("title", ""))
-    prompt = prompt.replace("{{summary}}", material.get("summary", ""))
-    prompt = prompt.replace("{{topics}}", ", ".join(material.get("topics", [])))
-    prompt = prompt.replace("{{angles}}", " | ".join(material.get("angles", [])))
-    prompt = prompt.replace("{{key_facts}}", " | ".join(material.get("key_facts", [])))
-    prompt = prompt.replace("{{source_title}}", material.get("source_title", ""))
+    # 判斷是單篇還是多篇
+    if isinstance(material, list):
+        materials = material
+    else:
+        materials = [material]
+
+    if len(materials) == 1:
+        m = materials[0]
+        prompt = template.replace("{{title}}", m.get("title", ""))
+        prompt = prompt.replace("{{summary}}", m.get("summary", ""))
+        prompt = prompt.replace("{{topics}}", ", ".join(m.get("topics", [])))
+        prompt = prompt.replace("{{angles}}", " | ".join(m.get("angles", [])))
+        prompt = prompt.replace("{{key_facts}}", " | ".join(m.get("key_facts", [])))
+        prompt = prompt.replace("{{source_title}}", m.get("source_title", ""))
+        # 移除多素材區塊
+        import re
+        prompt = re.sub(
+            r'\{\{#if combined\}\}.*?\{\{/if combined\}\}',
+            '',
+            prompt,
+            flags=re.DOTALL,
+        )
+    else:
+        # 多篇素材模式：替換為組合內容
+        all_topics = set()
+        all_angles = []
+        all_facts = []
+        titles = []
+        sources = []
+        for m in materials:
+            titles.append(m.get("title", ""))
+            sources.append(m.get("source_title", ""))
+            all_topics.update(m.get("topics", []))
+            all_angles.extend(m.get("angles", []))
+            all_facts.extend(m.get("key_facts", []))
+
+        prompt = template.replace("{{title}}", " + ".join(titles))
+        prompt = prompt.replace("{{summary}}", "（多篇素材組合，詳見下方）")
+        prompt = prompt.replace("{{topics}}", ", ".join(all_topics))
+        prompt = prompt.replace("{{angles}}", " | ".join(all_angles))
+        prompt = prompt.replace("{{key_facts}}", " | ".join(all_facts))
+        prompt = prompt.replace("{{source_title}}", ", ".join(sources))
+        prompt = prompt.replace("{{combined_materials}}", _format_materials(materials))
+        # 保留多素材區塊內容，移除標記
+        import re
+        prompt = re.sub(r'\{\{#if combined\}\}', '', prompt)
+        prompt = re.sub(r'\{\{/if combined\}\}', '', prompt)
+
     prompt = prompt.replace("{{post_type}}", post_type)
 
     # 注入高效能貼文範例
@@ -112,11 +169,11 @@ def build_prompt(
 
 def generate_post(
     client: genai.Client,
-    material: dict,
+    material: dict | list[dict],
     post_type: str = "",
     top_posts: list[dict] | None = None,
 ) -> str:
-    """生成 FB 貼文。回傳生成的貼文文字。"""
+    """生成 FB 貼文。支援單篇或多篇素材。回傳生成的貼文文字。"""
     prompt = build_prompt(material, post_type, top_posts)
 
     try:
