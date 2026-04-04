@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FB素材庫 — 貼文生成腳本
-從 Google Sheets 素材庫讀取素材，用 Claude 生成 FB 貼文。
+從 Google Sheets 素材庫讀取素材，用 Gemini 生成 FB 貼文。
 """
 
 import json
@@ -9,16 +9,16 @@ import os
 import sys
 from pathlib import Path
 
-import anthropic
+from google import genai
 import requests
 from dotenv import load_dotenv
 
 # 載入環境變數
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 APPS_SCRIPT_API_URL = os.getenv("APPS_SCRIPT_API_URL")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # 專案根目錄
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -100,12 +100,12 @@ def display_materials(materials: list[dict]):
 
 
 def generate_post(
-    client: anthropic.Anthropic,
+    client: genai.Client,
     material: dict,
     prompt_template: str,
     post_type: str = "",
 ) -> str:
-    """用 Claude 生成 FB 貼文。"""
+    """用 Gemini 生成 FB 貼文。"""
     prompt = prompt_template.replace("{{title}}", material.get("title", ""))
     prompt = prompt.replace("{{summary}}", material.get("summary", ""))
     prompt = prompt.replace("{{topics}}", ", ".join(material.get("topics", [])))
@@ -115,18 +115,17 @@ def generate_post(
     prompt = prompt.replace("{{post_type}}", post_type)
 
     try:
-        message = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
         )
-        return message.content[0].text
-    except anthropic.APIError as e:
-        print(f"❌ Claude API 錯誤：{e}")
+        return response.text
+    except Exception as e:
+        print(f"❌ Gemini API 錯誤：{e}")
         return ""
 
 
-def interactive_mode(client: anthropic.Anthropic, prompt_template: str):
+def interactive_mode(client: genai.Client, prompt_template: str):
     """互動模式：選擇素材並生成貼文。"""
     # 顯示統計
     stats = get_stats()
@@ -216,7 +215,7 @@ def interactive_mode(client: anthropic.Anthropic, prompt_template: str):
             print(f"💾 已儲存至：{output_path}")
 
 
-def quick_generate(client: anthropic.Anthropic, prompt_template: str, topic: str | None = None):
+def quick_generate(client: genai.Client, prompt_template: str, topic: str | None = None):
     """快速模式：自動選擇最佳素材並生成貼文。"""
     materials = get_materials(topic=topic, limit=5)
     unused = [m for m in materials if not m.get("used")]
@@ -242,15 +241,15 @@ def quick_generate(client: anthropic.Anthropic, prompt_template: str, topic: str
 
 def main():
     """主程式進入點。"""
-    if not ANTHROPIC_API_KEY:
-        print("❌ 錯誤：請設定 ANTHROPIC_API_KEY 環境變數")
+    if not GEMINI_API_KEY:
+        print("❌ 錯誤：請設定 GEMINI_API_KEY 環境變數")
         sys.exit(1)
 
     if not APPS_SCRIPT_API_URL:
         print("❌ 錯誤：請設定 APPS_SCRIPT_API_URL 環境變數")
         sys.exit(1)
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     prompt_template = load_copywriting_prompt()
 
     if len(sys.argv) > 1:

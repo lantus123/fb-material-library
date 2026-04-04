@@ -11,7 +11,7 @@
     {
       "name": "Parenting Science",
       "url": "https://parentingscience.com",
-      "feed_url": null,
+      "feed_url": "https://parentingscience.com/feed/",
       "language": "en",
       "focus": ["親子教養", "學習方法"],
       "crawl_type": "rss"
@@ -19,7 +19,7 @@
     {
       "name": "Big Life Journal",
       "url": "https://biglifejournal.com/blogs/blog",
-      "feed_url": null,
+      "feed_url": "https://biglifejournal.com/blogs/blog.atom",
       "language": "en",
       "focus": ["親子教養", "學習方法"],
       "crawl_type": "rss"
@@ -27,7 +27,7 @@
     {
       "name": "The Learning Scientists",
       "url": "https://www.learningscientists.org/blog",
-      "feed_url": null,
+      "feed_url": "https://www.learningscientists.org/blog?format=rss",
       "language": "en",
       "focus": ["學習方法"],
       "crawl_type": "rss"
@@ -65,28 +65,63 @@
       "crawl_type": "rss"
     },
     {
-      "name": "Maggie Dent (Australia)",
-      "url": "https://www.maggiedent.com/blog/",
-      "feed_url": null,
+      "name": "Greater Good (UC Berkeley)",
+      "url": "https://greatergood.berkeley.edu",
+      "feed_url": "https://greatergood.berkeley.edu/site/rss",
       "language": "en",
-      "focus": ["親子教養", "學習方法"],
+      "focus": ["親子教養", "學習方法", "教育政策趨勢"],
       "crawl_type": "rss"
     },
     {
-      "name": "Kimchi Mamas (Korea)",
-      "url": "https://kimchimamas.com",
-      "feed_url": null,
+      "name": "The Conversation AU (Education)",
+      "url": "https://theconversation.com/au/education",
+      "feed_url": "https://theconversation.com/au/education/articles.atom",
       "language": "en",
-      "focus": ["親子教養", "在地學區資訊"],
+      "focus": ["教學方法", "學習方法", "教育政策趨勢"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Nippon.com",
+      "url": "https://www.nippon.com/en/",
+      "feed_url": "https://www.nippon.com/en/feed/",
+      "language": "en",
+      "focus": ["教育政策趨勢", "親子教養"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Japan Times",
+      "url": "https://www.japantimes.co.jp",
+      "feed_url": "https://www.japantimes.co.jp/feed/",
+      "language": "en",
+      "focus": ["教育政策趨勢", "升學資訊"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Korea Herald",
+      "url": "https://www.koreaherald.com",
+      "feed_url": "https://www.koreaherald.com/rss/kh_National",
+      "language": "en",
+      "focus": ["教育政策趨勢", "升學資訊"],
+      "crawl_type": "rss"
+    },
+    {
+      "name": "Korea Times",
+      "url": "https://www.koreatimes.co.kr",
+      "feed_url": "https://feed.koreatimes.co.kr/k/allnews.xml",
+      "language": "en",
+      "focus": ["教育政策趨勢", "升學資訊"],
       "crawl_type": "rss"
     },
     {
       "name": "親子天下",
       "url": "https://www.parenting.com.tw",
-      "feed_url": "https://www.parenting.com.tw/feed/",
+      "feed_url": null,
       "language": "zh-TW",
       "focus": ["親子教養", "學習方法", "教育政策趨勢", "升學資訊"],
-      "crawl_type": "rss"
+      "crawl_type": "scrape",
+      "listing_url": "https://www.parenting.com.tw/article",
+      "link_selector": "a[href*='/article/']",
+      "content_selector": "article"
     },
     {
       "name": "翻轉教育",

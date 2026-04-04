@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 FB素材庫 — 自動爬取與分析腳本
-爬取教育網站文章，透過 Claude 分析後存入 Google Sheets 素材庫。
+爬取教育網站文章，透過 Gemini 分析後存入 Google Sheets 素材庫。
 """
 
 import difflib
@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse, urljoin
 
-import anthropic
+from google import genai
 import feedparser
 import requests
 from bs4 import BeautifulSoup
@@ -22,9 +22,9 @@ from dotenv import load_dotenv
 # 載入環境變數
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 APPS_SCRIPT_API_URL = os.getenv("APPS_SCRIPT_API_URL")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # 專案根目錄
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -213,8 +213,8 @@ def fetch_page_content(url: str, content_selector: str | None = None) -> str | N
         return None
 
 
-def analyze_article(client: anthropic.Anthropic, article: dict, prompt_template: str) -> dict | None:
-    """用 Claude 分析文章。"""
+def analyze_article(client: genai.Client, article: dict, prompt_template: str) -> dict | None:
+    """用 Gemini 分析文章。"""
     article_text = article.get("content") or article.get("summary", "")
     if not article_text or len(article_text.strip()) < 100:
         print(f"  ⏭ 內文太短，跳過：{article['title']}")
@@ -225,19 +225,18 @@ def analyze_article(client: anthropic.Anthropic, article: dict, prompt_template:
     prompt = prompt.replace("{{article_text}}", article_text)
 
     try:
-        message = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}],
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
         )
 
-        response_text = message.content[0].text
+        response_text = response.text
 
         # 嘗試從回應中提取 JSON
         json_start = response_text.find("{")
         json_end = response_text.rfind("}") + 1
         if json_start == -1 or json_end == 0:
-            print(f"  ⚠ Claude 回應無 JSON：{article['title']}")
+            print(f"  ⚠ Gemini 回應無 JSON：{article['title']}")
             return None
 
         result = json.loads(response_text[json_start:json_end])
@@ -247,8 +246,8 @@ def analyze_article(client: anthropic.Anthropic, article: dict, prompt_template:
     except json.JSONDecodeError as e:
         print(f"  ⚠ JSON 解析失敗：{e}")
         return None
-    except anthropic.APIError as e:
-        print(f"  ⚠ Claude API 錯誤：{e}")
+    except Exception as e:
+        print(f"  ⚠ Gemini API 錯誤：{e}")
         return None
 
 
@@ -339,7 +338,7 @@ def send_email_report(stats: dict):
 # ─── 主要爬取邏輯 ────────────────────────────────────────────
 
 def crawl_single_url(
-    client: anthropic.Anthropic,
+    client: genai.Client,
     url: str,
     source_name: str,
     prompt_template: str,
@@ -374,7 +373,7 @@ def crawl_single_url(
 
 
 def run_auto_crawl(
-    client: anthropic.Anthropic,
+    client: genai.Client,
     sources: list,
     prompt_template: str,
     max_days: int = 7,
@@ -453,8 +452,8 @@ def run_auto_crawl(
 
 def main():
     """主程式進入點。"""
-    if not ANTHROPIC_API_KEY:
-        print("❌ 錯誤：請設定 ANTHROPIC_API_KEY 環境變數")
+    if not GEMINI_API_KEY:
+        print("❌ 錯誤：請設定 GEMINI_API_KEY 環境變數")
         print("   複製 .env.example 為 .env 並填入 API Key")
         sys.exit(1)
 
@@ -462,7 +461,7 @@ def main():
         print("❌ 錯誤：請設定 APPS_SCRIPT_API_URL 環境變數")
         sys.exit(1)
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     sources = load_sources()
     prompt_template = load_analysis_prompt()
 
