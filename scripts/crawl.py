@@ -23,7 +23,6 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-APPS_SCRIPT_API_URL = os.getenv("APPS_SCRIPT_API_URL")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # 專案根目錄
@@ -72,14 +71,9 @@ def normalize_url(url: str) -> str:
 def fetch_existing_urls() -> tuple[set[str], list[str]]:
     """從 Google Sheets 取得已存的 URL 和標題，用於重複偵測。"""
     try:
-        resp = requests.get(
-            APPS_SCRIPT_API_URL,
-            params={"action": "getExistingUrls"},
-            timeout=REQUEST_TIMEOUT,
-        )
-        data = resp.json()
-        urls = {normalize_url(u) for u in data.get("urls", []) if u}
-        titles = [t for t in data.get("titles", []) if t]
+        from scripts.sheets_api import get_existing_urls
+        urls_raw, titles = get_existing_urls()
+        urls = {normalize_url(u) for u in urls_raw if u}
         return urls, titles
     except Exception as e:
         print(f"  ⚠ 無法取得已存 URL（將跳過重複偵測）：{e}")
@@ -252,30 +246,10 @@ def analyze_article(client: genai.Client, article: dict, prompt_template: str) -
 
 
 def post_to_sheets(material: dict) -> bool:
-    """將分析結果 POST 到 Apps Script API。"""
-    payload = {
-        "action": "addMaterial",
-        "curated_at": datetime.now().isoformat(),
-        "title": material.get("title", ""),
-        "summary": material.get("summary", ""),
-        "topics": material.get("topics", []),
-        "angles": material.get("angles", []),
-        "key_facts": material.get("key_facts", []),
-        "relevance_score": material.get("relevance_score", 0),
-        "relevance_reason": material.get("relevance_reason", ""),
-        "source_url": material.get("source_url", ""),
-        "source_title": material.get("source_title", ""),
-        "raw_text": material.get("raw_text", ""),
-    }
-
+    """將分析結果存入 Google Sheets 素材庫。"""
     try:
-        resp = requests.post(
-            APPS_SCRIPT_API_URL,
-            json=payload,
-            timeout=REQUEST_TIMEOUT,
-            headers={"Content-Type": "application/json"},
-        )
-        result = resp.json()
+        from scripts.sheets_api import add_material
+        result = add_material(material)
         if result.get("success"):
             print(f"  ✅ 已存入素材庫 (第 {result.get('row')} 列，共 {result.get('total')} 筆)")
             return True
@@ -293,46 +267,14 @@ def post_to_sheets(material: dict) -> bool:
 # ─── Email 報告 ──────────────────────────────────────────────
 
 def send_email_report(stats: dict):
-    """透過 Apps Script 寄送爬取報告 email。"""
+    """輸出爬取報告摘要（不再依賴 Apps Script 寄信）。"""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    body = f"""
-    <h2>📊 FB素材庫 — 爬取報告</h2>
-    <p><strong>時間：</strong>{now}</p>
-    <hr>
-    <table style="border-collapse:collapse; font-size:14px;">
-      <tr><td style="padding:4px 12px;">📰 處理文章數</td><td><strong>{stats.get('processed', 0)}</strong></td></tr>
-      <tr><td style="padding:4px 12px;">✅ 新增素材數</td><td><strong>{stats.get('saved', 0)}</strong></td></tr>
-      <tr><td style="padding:4px 12px;">⏭ 重複跳過</td><td><strong>{stats.get('duplicates', 0)}</strong></td></tr>
-      <tr><td style="padding:4px 12px;">🚫 分數不足</td><td><strong>{stats.get('low_score', 0)}</strong></td></tr>
-      <tr><td style="padding:4px 12px;">❌ 失敗</td><td><strong>{stats.get('errors', 0)}</strong></td></tr>
-    </table>
-    <hr>
-    <p style="color:#888; font-size:12px;">此信件由 FB素材庫自動排程系統發送</p>
-    """
-
-    subject = f"FB素材庫爬取報告 — {now}（新增 {stats.get('saved', 0)} 篇）"
-
-    payload = {
-        "action": "sendReport",
-        "email": "r19911219@gmail.com",
-        "subject": subject,
-        "body": body,
-    }
-
-    try:
-        resp = requests.post(
-            APPS_SCRIPT_API_URL,
-            json=payload,
-            timeout=REQUEST_TIMEOUT,
-            headers={"Content-Type": "application/json"},
-        )
-        result = resp.json()
-        if result.get("success"):
-            print(f"  📧 報告已寄出至 r19911219@gmail.com")
-        else:
-            print(f"  ⚠ 寄信失敗：{result.get('error')}")
-    except Exception as e:
-        print(f"  ⚠ 寄信請求失敗：{e}")
+    print(f"\n📊 FB素材庫 — 爬取報告 ({now})")
+    print(f"  📰 處理文章數：{stats.get('processed', 0)}")
+    print(f"  ✅ 新增素材數：{stats.get('saved', 0)}")
+    print(f"  ⏭ 重複跳過：{stats.get('duplicates', 0)}")
+    print(f"  🚫 分數不足：{stats.get('low_score', 0)}")
+    print(f"  ❌ 失敗：{stats.get('errors', 0)}")
 
 
 # ─── 主要爬取邏輯 ────────────────────────────────────────────
@@ -455,10 +397,6 @@ def main():
     if not GEMINI_API_KEY:
         print("❌ 錯誤：請設定 GEMINI_API_KEY 環境變數")
         print("   複製 .env.example 為 .env 並填入 API Key")
-        sys.exit(1)
-
-    if not APPS_SCRIPT_API_URL:
-        print("❌ 錯誤：請設定 APPS_SCRIPT_API_URL 環境變數")
         sys.exit(1)
 
     client = genai.Client(api_key=GEMINI_API_KEY)
