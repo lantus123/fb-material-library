@@ -1,0 +1,15 @@
+[Unit]
+Description=FB素材庫 Streamlit Web UI
+After=network.target
+
+[Service]
+Type=simple
+User=r19911219
+WorkingDirectory=/home/r19911219/fb-material-library
+ExecStart=/usr/local/bin/streamlit run app.py --server.headless true --server.port 8501 --server.address 0.0.0.0
+Restart=always
+RestartSec=5
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
