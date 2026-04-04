@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.sheets_api import get_post_records, update_post_metrics, update_post_rating
+from scripts.sheets_api import get_post_records, update_post_metrics, update_post_rating, update_post_content
 from pages.auth import require_auth
 
 st.set_page_config(page_title="貼文紀錄", page_icon="📋", layout="wide")
@@ -40,9 +40,22 @@ for r in records:
     fb_summary = f"👍{likes} 💬{comments} 🔄{shares}" if has_fb else "尚無FB數據"
 
     with st.expander(f"{date} | {title} | {post_type} | {stars} | {fb_summary}"):
-        # 貼文內容
-        st.markdown("**貼文內容：**")
-        st.text(r.get("post_content", "（無內容）"))
+        # 貼文內容（可編輯）
+        st.markdown("**貼文內容：**（可直接修改，改好後點「更新貼文內容」）")
+        edited_content = st.text_area(
+            "貼文內容",
+            value=r.get("post_content", ""),
+            height=200,
+            key=f"content_{row}",
+            label_visibility="collapsed",
+        )
+        if edited_content != r.get("post_content", ""):
+            if st.button("💾 更新貼文內容", key=f"update_content_{row}", type="primary"):
+                if update_post_content(row, edited_content):
+                    st.success("✅ 貼文內容已更新，這個版本會成為 AI 學習的範本！")
+                    st.rerun()
+                else:
+                    st.error("❌ 更新失敗")
 
         if r.get("notes"):
             st.markdown(f"**備註：** {r['notes']}")

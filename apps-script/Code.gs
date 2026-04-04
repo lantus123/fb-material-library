@@ -97,6 +97,9 @@ function doPost(e) {
     case 'updatePostRating':
       result = handleUpdatePostRating(data);
       break;
+    case 'updatePostContent':
+      result = handleUpdatePostContent(data);
+      break;
     default:
       result = { success: false, error: 'Unknown action' };
   }
@@ -399,6 +402,18 @@ function handleUpdatePostRating(data) {
       }
     }
     if (data.notes !== undefined) sheet.getRange(row, 7).setValue(data.notes);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function handleUpdatePostContent(data) {
+  try {
+    const sheet = initPostSheet();
+    const row = data.row;
+    if (!row) return { success: false, error: '缺少 row 參數' };
+    if (data.post_content !== undefined) sheet.getRange(row, 5).setValue(data.post_content);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };

@@ -118,3 +118,13 @@ def update_post_rating(row: int, rating: int, notes: str = "") -> bool:
         "notes": notes,
     })
     return result.get("success", False)
+
+
+def update_post_content(row: int, post_content: str) -> bool:
+    """更新貼文內容（用於儲存手動修改後的版本）。"""
+    result = _post({
+        "action": "updatePostContent",
+        "row": row,
+        "post_content": post_content,
+    })
+    return result.get("success", False)
