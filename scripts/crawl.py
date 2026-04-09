@@ -27,6 +27,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # 專案根目錄
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 SOURCES_PATH = PROJECT_ROOT / "config" / "sources.json"
 ANALYSIS_PROMPT_PATH = PROJECT_ROOT / "prompts" / "analysis.md"
 
