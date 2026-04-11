@@ -26,8 +26,10 @@ def _char_diff_ratio(original: str, edited: str) -> float:
     return abs(len(edited) - len(original)) / max(len(original), 1) * 100
 
 
-def compute_monthly_diff() -> dict:
-    records = get_post_records(limit=500)
+def compute_monthly_diff(records: list[dict] | None = None) -> dict:
+    """計算每月平均修改幅度。可傳入 records 避免重複讀 Sheet。"""
+    if records is None:
+        records = get_post_records(limit=500)
     buckets: dict[str, list[float]] = defaultdict(list)
     for r in records:
         original = r.get("original_content", "")

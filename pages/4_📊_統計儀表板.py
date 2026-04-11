@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.sheets_api import get_stats, get_post_records, get_top_posts
+from scripts.metrics import compute_monthly_diff
 from pages.auth import require_auth
 
 st.set_page_config(page_title="統計儀表板", page_icon="📊", layout="wide")
@@ -42,8 +43,7 @@ st.subheader("📱 貼文成效分析")
 records = get_post_records(limit=100)
 
 if not records:
-    st.info("📭 還沒有貼文紀錄，數據累積後這裡會顯示分析圖表。")
-    st.stop()
+    st.info("📭 還沒有貼文紀錄，貼文成效分析累積後會顯示。")
 
 # 基本統計
 total_posts = len(records)
@@ -94,6 +94,47 @@ if fb_posts:
 
     st.markdown("**平均互動數（按類型）**")
     st.bar_chart(engagement_chart)
+
+# ─── 學習指標 ─────────────────────────────────────────
+st.divider()
+st.subheader("🧠 學習指標")
+st.caption("衡量 AI 初版 → 你最終版的貼近程度。學習迴路有效時，差異應隨月份下降。")
+
+edited = [
+    r for r in records
+    if r.get("original_content")
+    and r["original_content"].strip() != (r.get("post_content") or "").strip()
+]
+principled = [r for r in records if r.get("edit_principle")]
+
+lc1, lc2, lc3 = st.columns(3)
+lc1.metric("累積貼文", len(records))
+lc2.metric("已編輯貼文", len(edited))
+lc3.metric("已萃取原則", len(principled))
+
+monthly = compute_monthly_diff(records=records)
+if monthly:
+    st.markdown("**每月 AI 初版 → 最終版 平均字數差異 %**")
+    chart_data = {m: s["avg_diff_pct"] for m, s in monthly.items()}
+    st.line_chart(chart_data)
+    rows_table = [
+        {"月份": m, "樣本數": s["count"], "平均差異 %": s["avg_diff_pct"]}
+        for m, s in monthly.items()
+    ]
+    st.dataframe(rows_table, hide_index=True, use_container_width=True)
+else:
+    st.info(
+        "📭 還沒累積到編輯資料。先生成幾篇貼文、實際做過修改後，"
+        "這裡會出現逐月學習趨勢圖。"
+    )
+
+if principled:
+    st.markdown("**🧩 最近萃取的修改原則**")
+    for r in principled[:5]:
+        title = (r.get("material_title") or "")[:40]
+        date = str(r.get("generated_at", ""))[:10]
+        st.markdown(f"**{date}** · {title}")
+        st.code(r.get("edit_principle", ""), language=None)
 
 # 最佳貼文排行
 st.divider()
