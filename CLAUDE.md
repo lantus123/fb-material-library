@@ -106,10 +106,14 @@ bash scripts/start_web.sh
 
 # 或手動啟動
 streamlit run app.py
-
-# 瀏覽器打開 http://35.201.163.220:8501
-# 密碼登入後即可使用
 ```
+
+部署入口：
+
+- **Streamlit Cloud（主要）**：https://fb-material-library.streamlit.app
+- **自架 GCP VM**：http://35.201.163.220:8501
+
+兩者都需要密碼登入。
 
 ### 自動爬取
 
