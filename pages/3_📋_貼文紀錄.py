@@ -118,10 +118,12 @@ for r in records:
                             original=original_content,
                             edited=post_content,
                             reasons=r.get("edit_reasons", ""),
+                            source_post_row=row,
+                            post_type=post_type,
                         )
                         if principle and not principle.startswith("❌"):
                             update_edit_principle(row, principle)
-                            st.success("✅ 已萃取原則")
+                            st.success("✅ 已萃取原則並寫入原則庫")
                             st.rerun()
                         else:
                             st.error(principle or "❌ 分析失敗")

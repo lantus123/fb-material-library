@@ -31,8 +31,10 @@ fb-material-library/
 │   ├── auth.py                     # 共用密碼驗證模組
 │   ├── 1_📚_素材庫瀏覽.py          # 瀏覽/篩選素材
 │   ├── 2_✏️_貼文生成.py            # 生成/編輯/評分/儲存貼文
-│   ├── 3_📋_貼文紀錄.py            # 歷史紀錄 + 回饋管理
-│   └── 4_📊_統計儀表板.py          # 成效分析圖表
+│   ├── 3_📋_貼文紀錄.py            # 歷史紀錄 + 回饋管理 + diff 分析
+│   ├── 4_📊_統計儀表板.py          # 成效分析圖表 + 學習指標
+│   ├── 5_📝_手動輸入.py            # 手動加入素材 + 寫法範本庫
+│   └── 6_🧠_原則庫.py              # 修改原則庫 CRUD + 維護（階段 2）
 ├── apps-script/
 │   └── Code.gs                     # Google Apps Script（素材庫 + 貼文紀錄）
 ├── config/
@@ -47,6 +49,7 @@ fb-material-library/
 │   ├── sheets_api.py               # Google Sheets API 共用模組
 │   ├── post_generator.py           # 貼文生成核心（含 few-shot 回饋 + diff 分析）
 │   ├── metrics.py                  # 學習效果指標（每月 AI 初版→最終版 diff %）
+│   ├── merge_principles.py         # 月度原則庫合併腳本（階段 2，cron 用）
 │   ├── backup_sheets.sh            # 每週備份所有工作表為 CSV
 │   ├── crawl.py                    # 爬取 + 分析腳本
 │   ├── crawl_scheduled.sh          # 排程爬取（cron 用）
@@ -164,13 +167,29 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 3. **自動學習**：生成新貼文時，自動將過去表現最好的 3 篇作為 few-shot 範例注入 prompt
 4. **加權排序**：主觀評分 30% + 互動數據 70%
 5. **Diff 學習（階段 1）**：貼文紀錄頁面保留 AI 原版，使用者編輯後可按「🔍 分析差異並學習」呼叫 Gemini 萃取一條「修改原則」存回 Sheet；亦可一鍵退回原版；並可勾選修改原因標籤讓分析更精準。
+6. **原則庫回灌（階段 2）**：diff 分析萃取的原則會同時寫入獨立的「修改原則」工作表；生成新貼文時，`build_prompt` 自動拉取啟用中的原則注入 prompt（`{{principles}}` 區塊），形成閉環。機制：
+   - 冷啟動門檻：啟用中原則 < 5 條時不注入（避免 AI 以為規則就這麼點）
+   - Prompt 預算：單次最多注入 10 條
+   - 主題優先：若當下 `post_type` 有相關原則，優先取同主題
+   - 衰減：超過 90 天未被引用的自動標為 `archived`（lazy decay）
+   - A/B 對照 few-shot：`get_top_posts` 若貼文有編輯版，會在 prompt 中並列顯示「AI 初版 ❌ → 最終版 ✅」
+   - 迴音室防線：`get_top_posts` 權重改為「主觀評分 60% + 互動 40%」、強制每個 `post_type` 至少取 1 篇
+   - 月度合併：`scripts/merge_principles.py` 透過 Gemini 自動合併相似原則，合併前快照到 `logs/principles_snapshots/`
 
 ### 貼文紀錄 Sheet 欄位
 
 `貼文紀錄` 工作表在階段 1 新增三個欄位：
 - `原始內容`（col 14）— AI 生成版本，不可變，作為 diff 分析基準
 - `修改原因`（col 15）— 使用者勾選的標籤，以 `|` 分隔
-- `修改原則`（col 16）— Gemini 分析 diff 後萃取的一條原則
+- `修改原則`（col 16）— Gemini 分析 diff 後萃取的一條原則（原始 raw 輸出，同步寫入 `修改原則` 工作表）
+
+### 修改原則 Sheet 欄位（階段 2 新增）
+
+`修改原則` 工作表 schema：
+- col 1-4：建立時間 / 類型（正向/負向）/ 原則 / 理由
+- col 5-6：來源貼文（貼文紀錄 row 號或「手動」）/ 主題
+- col 7-8：使用次數（生成時被注入 +1）/ 最後引用時間
+- col 9-10：狀態（active/disabled/archived）/ 備註
 
 ### 學習指標
 
@@ -207,7 +226,7 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 - [x] 回饋系統（評分 + FB 成效追蹤 + few-shot 學習）
 - [x] Facebook Graph API 串接（成效數據自動蒐集）
 - [x] 階段 0/1：升級 Pro + meta 前綴禁止 + 保留原版 + diff 萃取修改原則 + 學習指標 + 備份腳本
-- [ ] 階段 2：修改原則庫（累積/衰減/合併） + A/B 對照 few-shot 注入 + 冷啟動門檻
+- [x] 階段 2：修改原則庫（CRUD/衰減/月度合併）+ A/B 對照 few-shot + 冷啟動門檻 + prompt 預算 + 主題平衡
 - [ ] 階段 3：主題分群 + 風格指紋
 - [ ] 階段 4：Self-critique 迴圈 + 多版本生成 + 多樣性保護
 - [ ] 貼文排程發佈（Facebook Graph API publish）

@@ -83,6 +83,16 @@ STYLE_HEADERS = [
     '收錄時間', '標題', '原文內容', '寫法亮點', '來源URL', '標籤'
 ]
 
+PRINCIPLE_HEADERS = [
+    '建立時間', '類型', '原則', '理由', '來源貼文', '主題',
+    '使用次數', '最後引用時間', '狀態', '備註'
+]
+
+# 階段 2 常數
+PRINCIPLE_DECAY_DAYS = 90          # 超過 N 天未引用的原則自動 archived
+MIN_PRINCIPLES_FOR_INJECTION = 5   # 冷啟動門檻：少於 N 條不注入
+MAX_PRINCIPLES_IN_PROMPT = 10      # prompt 預算：單次最多注入幾條
+
 
 # ─── 素材庫 ────────────────────────────────────────────────
 
@@ -289,7 +299,11 @@ def get_post_records(limit: int = 50) -> list[dict]:
 
 
 def get_top_posts(limit: int = 3) -> list[dict]:
-    """取得表現最好的貼文（用於 few-shot prompt）。"""
+    """取得表現最好的貼文（用於 few-shot prompt）。
+
+    權重：主觀評分 60% + 互動 40%（反轉自舊版 30/70 以避免迴音室）。
+    主題平衡：優先確保每個 post_type 至少入選一篇，剩餘名額再依綜合分數填入。
+    """
     records = get_post_records(limit=100)
     posts = [r for r in records if r.get("rating", 0) > 0]
     if not posts:
@@ -304,10 +318,27 @@ def get_top_posts(limit: int = 3) -> list[dict]:
         if p["likes"] == 0 and p["comments"] == 0 and p["shares"] == 0:
             p["composite_score"] = p["rating"]
         else:
-            p["composite_score"] = p["rating"] * 0.3 + engagement_score * 0.7
+            p["composite_score"] = p["rating"] * 0.6 + engagement_score * 0.4
 
     posts.sort(key=lambda p: -p["composite_score"])
-    return posts[:limit]
+
+    selected: list[dict] = []
+    seen_types: set[str] = set()
+    for p in posts:
+        pt = p.get("post_type") or "一般"
+        if pt not in seen_types:
+            selected.append(p)
+            seen_types.add(pt)
+            if len(selected) >= limit:
+                break
+
+    for p in posts:
+        if len(selected) >= limit:
+            break
+        if p not in selected:
+            selected.append(p)
+
+    return selected[:limit]
 
 
 def update_post_metrics(
@@ -388,6 +419,196 @@ def get_post_row(row: int) -> dict:
         "edit_reasons": values[14],
         "edit_principle": values[15],
     }
+
+
+# ─── 修改原則庫（階段 2）──────────────────────────────────
+
+def _parse_iso(ts: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(ts)
+    except Exception:
+        return None
+
+
+def get_all_principles() -> list[dict]:
+    """取得全部原則（含 archived/disabled），供管理頁面使用。"""
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    rows = ws.get_all_values()
+    if len(rows) <= 1:
+        return []
+    n = len(PRINCIPLE_HEADERS)
+    records = []
+    for idx, row in enumerate(rows[1:], start=2):
+        if len(row) < n:
+            row.extend([""] * (n - len(row)))
+        records.append({
+            "row_number": idx,
+            "created_at": row[0],
+            "type": row[1],
+            "principle": row[2],
+            "reason": row[3],
+            "source_post_row": row[4],
+            "topic": row[5],
+            "usage_count": int(row[6]) if row[6] and str(row[6]).isdigit() else 0,
+            "last_used_at": row[7],
+            "status": row[8] or "active",
+            "notes": row[9],
+        })
+    records.reverse()
+    return records
+
+
+def get_active_principles(
+    topic: str | None = None,
+    limit: int = MAX_PRINCIPLES_IN_PROMPT,
+) -> list[dict]:
+    """取得啟用中的原則，供 prompt 注入使用。
+
+    - 過濾掉 archived / disabled 狀態
+    - 若指定 topic 則優先同主題，不足時補全不指定主題的原則
+    - 超過 PRINCIPLE_DECAY_DAYS 未使用的自動視為 archived（lazy decay，不寫回 Sheet）
+    - 排序：按最後引用時間降序，沒用過的按建立時間降序
+    """
+    all_principles = get_all_principles()
+    now = datetime.now()
+
+    def is_alive(p: dict) -> bool:
+        if p["status"] != "active":
+            return False
+        ref_time = _parse_iso(p["last_used_at"]) or _parse_iso(p["created_at"])
+        if ref_time and (now - ref_time).days > PRINCIPLE_DECAY_DAYS:
+            return False
+        return True
+
+    alive = [p for p in all_principles if is_alive(p)]
+
+    def sort_key(p: dict):
+        t = _parse_iso(p["last_used_at"]) or _parse_iso(p["created_at"]) or datetime.min
+        return -t.timestamp()
+
+    alive.sort(key=sort_key)
+
+    if topic:
+        same_topic = [p for p in alive if p["topic"] == topic]
+        other_topic = [p for p in alive if p["topic"] != topic]
+        merged = same_topic + other_topic
+    else:
+        merged = alive
+
+    return merged[:limit]
+
+
+def add_principle(
+    principle_type: str,
+    principle: str,
+    reason: str = "",
+    source_post_row: int | str = "",
+    topic: str = "",
+    notes: str = "",
+) -> dict:
+    """新增一條修改原則。回傳 {success, row}。"""
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    row = [
+        datetime.now().isoformat(),
+        principle_type,
+        principle,
+        reason,
+        str(source_post_row),
+        topic,
+        0,
+        "",
+        "active",
+        notes,
+    ]
+    ws.append_row(row, value_input_option="USER_ENTERED")
+    last_row = len(ws.get_all_values())
+    return {"success": True, "row": last_row}
+
+
+def delete_principles_by_source(source_post_row: int) -> int:
+    """刪除所有來源貼文列號等於 source_post_row 的原則。回傳刪除筆數。"""
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    rows = ws.get_all_values()
+    to_delete = []
+    for idx, row in enumerate(rows[1:], start=2):
+        if len(row) >= 5 and row[4] == str(source_post_row):
+            to_delete.append(idx)
+    for row_num in reversed(to_delete):
+        ws.delete_rows(row_num)
+    return len(to_delete)
+
+
+def update_principle(
+    row: int,
+    principle: str | None = None,
+    reason: str | None = None,
+    principle_type: str | None = None,
+    topic: str | None = None,
+    notes: str | None = None,
+) -> bool:
+    """手動更新原則內容。只更新非 None 的欄位。"""
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    updates = []
+    if principle_type is not None:
+        updates.append((row, 2, principle_type))
+    if principle is not None:
+        updates.append((row, 3, principle))
+    if reason is not None:
+        updates.append((row, 4, reason))
+    if topic is not None:
+        updates.append((row, 6, topic))
+    if notes is not None:
+        updates.append((row, 10, notes))
+    for r, c, v in updates:
+        ws.update_cell(r, c, v)
+    return True
+
+
+def set_principle_status(row: int, status: str) -> bool:
+    """設定原則狀態：active / disabled / archived。"""
+    if status not in ("active", "disabled", "archived"):
+        return False
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    ws.update_cell(row, 9, status)
+    return True
+
+
+def delete_principle(row: int) -> bool:
+    """永久刪除一條原則。"""
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    ws.delete_rows(row)
+    return True
+
+
+def bump_principles_usage(rows: list[int]) -> None:
+    """批次更新多條原則的使用次數 +1 與最後引用時間。"""
+    if not rows:
+        return
+    ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
+    now = datetime.now().isoformat()
+    for r in rows:
+        try:
+            cur = ws.cell(r, 7).value
+            count = int(cur) if cur and str(cur).isdigit() else 0
+        except Exception:
+            count = 0
+        ws.update_cell(r, 7, count + 1)
+        ws.update_cell(r, 8, now)
+
+
+def apply_principle_decay() -> int:
+    """把超過 PRINCIPLE_DECAY_DAYS 未使用的原則標為 archived。回傳受影響筆數。"""
+    all_principles = get_all_principles()
+    now = datetime.now()
+    archived = 0
+    for p in all_principles:
+        if p["status"] != "active":
+            continue
+        ref_time = _parse_iso(p["last_used_at"]) or _parse_iso(p["created_at"])
+        if ref_time and (now - ref_time).days > PRINCIPLE_DECAY_DAYS:
+            set_principle_status(p["row_number"], "archived")
+            archived += 1
+    return archived
 
 
 # ─── 寫法範本 ──────────────────────────────────────────────
