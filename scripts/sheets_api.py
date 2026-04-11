@@ -7,6 +7,8 @@ import json
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+from time import time
+from typing import Any, Callable
 
 import gspread
 from dotenv import load_dotenv
@@ -24,6 +26,35 @@ def _get_secret(key: str, default: str = "") -> str:
         return st.secrets.get(key, os.getenv(key, default))
     except Exception:
         return os.getenv(key, default)
+
+
+# ─── TTL Cache（避免 gspread 配額爆掉）───────────────────
+
+_CACHE_STORE: dict[str, tuple[float, Any]] = {}
+_DEFAULT_TTL = 60  # 秒
+
+
+def _cached(key: str, fn: Callable[[], Any], ttl: int = _DEFAULT_TTL) -> Any:
+    """簡易 TTL 快取。key 相同時在 ttl 秒內直接回傳快取值。"""
+    now = time()
+    entry = _CACHE_STORE.get(key)
+    if entry and now - entry[0] < ttl:
+        return entry[1]
+    val = fn()
+    _CACHE_STORE[key] = (now, val)
+    return val
+
+
+def invalidate_cache(prefix: str = "") -> int:
+    """清除快取；若指定 prefix 只清除相符的 key。回傳清除筆數。"""
+    if not prefix:
+        count = len(_CACHE_STORE)
+        _CACHE_STORE.clear()
+        return count
+    keys = [k for k in _CACHE_STORE.keys() if k.startswith(prefix)]
+    for k in keys:
+        del _CACHE_STORE[k]
+    return len(keys)
 
 
 def _get_client() -> gspread.Client:
@@ -257,11 +288,11 @@ def add_post_record(
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
     last_row = len(ws.get_all_values())
+    invalidate_cache("post_records")
     return {"success": True, "row": last_row, "total": last_row - 1}
 
 
-def get_post_records(limit: int = 50) -> list[dict]:
-    """取得貼文紀錄。"""
+def _load_post_records_uncached() -> list[dict]:
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     rows = ws.get_all_values()
     if len(rows) <= 1:
@@ -272,7 +303,6 @@ def get_post_records(limit: int = 50) -> list[dict]:
     for idx, row in enumerate(rows[1:], start=2):
         if len(row) < n:
             row.extend([""] * (n - len(row)))
-        # 舊資料沒有原始內容 → fallback 為當前貼文內容（避免 diff 分析誤判）
         original = row[13] or row[4]
         records.append({
             "row_number": idx,
@@ -295,6 +325,12 @@ def get_post_records(limit: int = 50) -> list[dict]:
         })
 
     records.reverse()
+    return records
+
+
+def get_post_records(limit: int = 50) -> list[dict]:
+    """取得貼文紀錄（60 秒 TTL 快取）。"""
+    records = _cached("post_records", _load_post_records_uncached)
     return records[:limit]
 
 
@@ -361,6 +397,7 @@ def update_post_metrics(
     updates.append({"row": row, "col": 13, "val": datetime.now().isoformat()})
     for u in updates:
         ws.update_cell(u["row"], u["col"], u["val"])
+    invalidate_cache("post_records")
     return True
 
 
@@ -369,6 +406,7 @@ def update_post_rating(row: int, rating: int, notes: str = "") -> bool:
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     ws.update_cell(row, 6, rating)
     ws.update_cell(row, 7, notes)
+    invalidate_cache("post_records")
     return True
 
 
@@ -376,6 +414,7 @@ def update_post_content(row: int, post_content: str) -> bool:
     """更新貼文內容（用於儲存手動修改後的版本）。不動原始內容欄位。"""
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     ws.update_cell(row, 5, post_content)
+    invalidate_cache("post_records")
     return True
 
 
@@ -383,6 +422,7 @@ def update_edit_reasons(row: int, reasons: str) -> bool:
     """更新修改原因標籤（以 | 分隔的字串）。"""
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     ws.update_cell(row, 15, reasons)
+    invalidate_cache("post_records")
     return True
 
 
@@ -390,6 +430,7 @@ def update_edit_principle(row: int, principle: str) -> bool:
     """寫入 diff 分析產出的修改原則。"""
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     ws.update_cell(row, 16, principle)
+    invalidate_cache("post_records")
     return True
 
 
@@ -402,6 +443,7 @@ def revert_post_to_original(row: int) -> bool:
     ws.update_cell(row, 5, original)
     ws.update_cell(row, 15, "")
     ws.update_cell(row, 16, "")
+    invalidate_cache("post_records")
     return True
 
 
@@ -430,8 +472,7 @@ def _parse_iso(ts: str) -> datetime | None:
         return None
 
 
-def get_all_principles() -> list[dict]:
-    """取得全部原則（含 archived/disabled），供管理頁面使用。"""
+def _load_principles_uncached() -> list[dict]:
     ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
     rows = ws.get_all_values()
     if len(rows) <= 1:
@@ -456,6 +497,11 @@ def get_all_principles() -> list[dict]:
         })
     records.reverse()
     return records
+
+
+def get_all_principles() -> list[dict]:
+    """取得全部原則（60 秒 TTL 快取），供管理頁面使用。"""
+    return _cached("principles", _load_principles_uncached)
 
 
 def get_active_principles(
@@ -522,6 +568,7 @@ def add_principle(
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
     last_row = len(ws.get_all_values())
+    invalidate_cache("principles")
     return {"success": True, "row": last_row}
 
 
@@ -535,6 +582,8 @@ def delete_principles_by_source(source_post_row: int) -> int:
             to_delete.append(idx)
     for row_num in reversed(to_delete):
         ws.delete_rows(row_num)
+    if to_delete:
+        invalidate_cache("principles")
     return len(to_delete)
 
 
@@ -561,6 +610,7 @@ def update_principle(
         updates.append((row, 10, notes))
     for r, c, v in updates:
         ws.update_cell(r, c, v)
+    invalidate_cache("principles")
     return True
 
 
@@ -570,6 +620,7 @@ def set_principle_status(row: int, status: str) -> bool:
         return False
     ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
     ws.update_cell(row, 9, status)
+    invalidate_cache("principles")
     return True
 
 
@@ -577,6 +628,7 @@ def delete_principle(row: int) -> bool:
     """永久刪除一條原則。"""
     ws = _get_or_create_sheet("修改原則", PRINCIPLE_HEADERS)
     ws.delete_rows(row)
+    invalidate_cache("principles")
     return True
 
 
@@ -594,6 +646,7 @@ def bump_principles_usage(rows: list[int]) -> None:
             count = 0
         ws.update_cell(r, 7, count + 1)
         ws.update_cell(r, 8, now)
+    invalidate_cache("principles")
 
 
 def apply_principle_decay() -> int:
@@ -632,11 +685,11 @@ def add_style_example(
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
     last_row = len(ws.get_all_values())
+    invalidate_cache("style_examples")
     return {"success": True, "row": last_row, "total": last_row - 1}
 
 
-def get_style_examples(limit: int = 20) -> list[dict]:
-    """取得寫法範本。"""
+def _load_style_examples_uncached() -> list[dict]:
     ws = _get_or_create_sheet("寫法範本", STYLE_HEADERS)
     rows = ws.get_all_values()
     if len(rows) <= 1:
@@ -657,4 +710,10 @@ def get_style_examples(limit: int = 20) -> list[dict]:
         })
 
     examples.reverse()
+    return examples
+
+
+def get_style_examples(limit: int = 20) -> list[dict]:
+    """取得寫法範本（60 秒 TTL 快取）。"""
+    examples = _cached("style_examples", _load_style_examples_uncached)
     return examples[:limit]

@@ -16,11 +16,16 @@ from scripts.sheets_api import (
     get_top_posts,
     get_style_examples,
     get_active_principles,
+    get_post_records,
     add_principle,
     delete_principles_by_source,
     bump_principles_usage,
     MIN_PRINCIPLES_FOR_INJECTION,
     MAX_PRINCIPLES_IN_PROMPT,
+)
+from scripts.style_fingerprint import (
+    compute_fingerprints,
+    format_fingerprint_for_prompt,
 )
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -285,6 +290,30 @@ def build_prompt(
         import re
         prompt = re.sub(
             r'\{\{#if principles\}\}.*?\{\{/if principles\}\}',
+            '',
+            prompt,
+            flags=re.DOTALL,
+        )
+
+    # 注入風格指紋（階段 3）— 只注入當前 post_type 的指紋
+    fingerprint_text = ""
+    if post_type:
+        try:
+            records = get_post_records(limit=200)
+            fingerprints = compute_fingerprints(records)
+            if post_type in fingerprints:
+                fingerprint_text = format_fingerprint_for_prompt(
+                    fingerprints[post_type], post_type
+                )
+        except Exception:
+            fingerprint_text = ""
+
+    if fingerprint_text:
+        prompt = prompt.replace("{{style_fingerprint}}", fingerprint_text)
+    else:
+        import re
+        prompt = re.sub(
+            r'\{\{#if style_fingerprint\}\}.*?\{\{/if style_fingerprint\}\}',
             '',
             prompt,
             flags=re.DOTALL,

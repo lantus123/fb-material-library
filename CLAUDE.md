@@ -49,6 +49,7 @@ fb-material-library/
 │   ├── sheets_api.py               # Google Sheets API 共用模組
 │   ├── post_generator.py           # 貼文生成核心（含 few-shot 回饋 + diff 分析）
 │   ├── metrics.py                  # 學習效果指標（每月 AI 初版→最終版 diff %）
+│   ├── style_fingerprint.py        # 風格指紋（階段 3，量化特徵抽取）
 │   ├── merge_principles.py         # 月度原則庫合併腳本（階段 2，cron 用）
 │   ├── backup_sheets.sh            # 每週備份所有工作表為 CSV
 │   ├── crawl.py                    # 爬取 + 分析腳本
@@ -175,6 +176,12 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
    - A/B 對照 few-shot：`get_top_posts` 若貼文有編輯版，會在 prompt 中並列顯示「AI 初版 ❌ → 最終版 ✅」
    - 迴音室防線：`get_top_posts` 權重改為「主觀評分 60% + 互動 40%」、強制每個 `post_type` 至少取 1 篇
    - 月度合併：`scripts/merge_principles.py` 透過 Gemini 自動合併相似原則，合併前快照到 `logs/principles_snapshots/`
+7. **風格指紋 + TTL 快取（階段 3）**：
+   - `scripts/style_fingerprint.py` 從「post_type + 評分 ≥4」的樣本抽取量化特徵（平均字數、emoji 密度、問句比例、開頭型態、hashtag 數、段落數、句長）
+   - 樣本門檻：每主題 ≥3 篇才計算；`build_prompt` 依當下 `post_type` 注入對應指紋（`{{style_fingerprint}}` 區塊）
+   - 指紋呈現為「統計趨勢」而非「硬性規則」，衝突時以內容為優先
+   - `sheets_api.py` 新增 TTL cache（預設 60 秒）包住 `get_post_records` / `get_all_principles` / `get_style_examples`，寫入函式自動 invalidate；主要為避免 gspread 每分鐘配額爆掉
+   - 儀表板新增「🎨 各主題風格指紋」區塊，顯示每個主題的量化特徵
 
 ### 貼文紀錄 Sheet 欄位
 
@@ -227,7 +234,7 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 - [x] Facebook Graph API 串接（成效數據自動蒐集）
 - [x] 階段 0/1：升級 Pro + meta 前綴禁止 + 保留原版 + diff 萃取修改原則 + 學習指標 + 備份腳本
 - [x] 階段 2：修改原則庫（CRUD/衰減/月度合併）+ A/B 對照 few-shot + 冷啟動門檻 + prompt 預算 + 主題平衡
-- [ ] 階段 3：主題分群 + 風格指紋
+- [x] 階段 3：風格指紋量化特徵 + 主題分群注入 + TTL cache（避免 gspread 配額爆掉）
 - [ ] 階段 4：Self-critique 迴圈 + 多版本生成 + 多樣性保護
 - [ ] 貼文排程發佈（Facebook Graph API publish）
 - [ ] 圖片素材生成

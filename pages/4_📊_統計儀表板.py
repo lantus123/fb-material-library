@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.sheets_api import get_stats, get_post_records, get_top_posts
 from scripts.metrics import compute_monthly_diff
+from scripts.style_fingerprint import compute_fingerprints, MIN_SAMPLES_PER_TOPIC
 from pages.auth import require_auth
 
 st.set_page_config(page_title="統計儀表板", page_icon="📊", layout="wide")
@@ -135,6 +136,38 @@ if principled:
         date = str(r.get("generated_at", ""))[:10]
         st.markdown(f"**{date}** · {title}")
         st.code(r.get("edit_principle", ""), language=None)
+
+# ─── 風格指紋（階段 3）─────────────────────────────────
+st.divider()
+st.subheader("🎨 各主題風格指紋")
+st.caption(
+    f"從每個主題「評分 ≥4」的貼文抽取量化特徵，作為生成時的風格參照。"
+    f"每主題至少需要 {MIN_SAMPLES_PER_TOPIC} 個樣本才會顯示。"
+)
+
+fingerprints = compute_fingerprints(records)
+if not fingerprints:
+    st.info(
+        f"📭 還沒有主題累積到足夠樣本（需要 ≥4 分、≥{MIN_SAMPLES_PER_TOPIC} 篇）。"
+        f"累積後這裡會顯示各主題的字數、emoji 密度、問句比例等統計。"
+    )
+else:
+    fp_cols = st.columns(min(len(fingerprints), 3))
+    for i, (topic, fp) in enumerate(fingerprints.items()):
+        with fp_cols[i % len(fp_cols)]:
+            st.markdown(f"**{topic}** （{fp['sample_size']} 篇樣本）")
+            st.metric("平均字數", f"{fp['avg_length']} 字")
+            st.metric("emoji 密度", f"{fp['emoji_density']} / 百字")
+            st.metric("問句比例", f"{fp['avg_question_ratio']}%")
+            st.caption(
+                f"段落 {fp['avg_paragraph_count']} · "
+                f"hashtag {fp['avg_hashtag_count']} · "
+                f"句長 {fp['avg_sentence_length']}"
+            )
+            if fp["opens_with_question_pct"] >= 50:
+                st.caption(f"🙋 {fp['opens_with_question_pct']}% 以問句開頭")
+            if fp["opens_with_bracket_pct"] >= 50:
+                st.caption(f"【 {fp['opens_with_bracket_pct']}% 以【】開頭")
 
 # 最佳貼文排行
 st.divider()
