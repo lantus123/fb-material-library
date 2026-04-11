@@ -40,16 +40,20 @@ fb-material-library/
 │   └── brand.json                  # 品牌設定
 ├── prompts/
 │   ├── analysis.md                 # 文章分析 prompt 模板
-│   └── copywriting.md              # 貼文生成 prompt 模板（含回饋注入）
+│   ├── copywriting.md              # 貼文生成 prompt 模板（含回饋注入）
+│   └── diff_analysis.md            # 修改差異分析 prompt（萃取修改原則）
 ├── scripts/
 │   ├── __init__.py
 │   ├── sheets_api.py               # Google Sheets API 共用模組
-│   ├── post_generator.py           # 貼文生成核心（含 few-shot 回饋）
+│   ├── post_generator.py           # 貼文生成核心（含 few-shot 回饋 + diff 分析）
+│   ├── metrics.py                  # 學習效果指標（每月 AI 初版→最終版 diff %）
+│   ├── backup_sheets.sh            # 每週備份所有工作表為 CSV
 │   ├── crawl.py                    # 爬取 + 分析腳本
 │   ├── crawl_scheduled.sh          # 排程爬取（cron 用）
 │   ├── generate_post.py            # CLI 貼文生成
 │   ├── fb_api.py                   # Facebook Graph API 串接
 │   ├── start_web.sh                # 啟動 Streamlit 腳本
+│   ├── test_model_compare.py       # 一次性：比較不同 Gemini model 的生成品質
 │   └── fb-material-streamlit.service # systemd 服務檔（備用）
 ├── .streamlit/
 │   ├── config.toml                 # Streamlit 設定
@@ -159,6 +163,18 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 2. **FB 成效追蹤**：記錄按讚、留言、分享、觸及數
 3. **自動學習**：生成新貼文時，自動將過去表現最好的 3 篇作為 few-shot 範例注入 prompt
 4. **加權排序**：主觀評分 30% + 互動數據 70%
+5. **Diff 學習（階段 1）**：貼文紀錄頁面保留 AI 原版，使用者編輯後可按「🔍 分析差異並學習」呼叫 Gemini 萃取一條「修改原則」存回 Sheet；亦可一鍵退回原版；並可勾選修改原因標籤讓分析更精準。
+
+### 貼文紀錄 Sheet 欄位
+
+`貼文紀錄` 工作表在階段 1 新增三個欄位：
+- `原始內容`（col 14）— AI 生成版本，不可變，作為 diff 分析基準
+- `修改原因`（col 15）— 使用者勾選的標籤，以 `|` 分隔
+- `修改原則`（col 16）— Gemini 分析 diff 後萃取的一條原則
+
+### 學習指標
+
+`python3 scripts/metrics.py` 會計算每月「AI 初版 → 最終版」平均字數差異 %。若學習迴路有效，這個數字應隨月份下降。做任何 prompt 或 model 變動後，此為核心驗證指標。
 
 ## 品牌指南
 
@@ -177,8 +193,10 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 4. 相關性分數 < 5 的文章不會自動存入素材庫
 5. Apps Script 部署方式：在 Google Sheets 的 Extensions → Apps Script 中貼入 Code.gs，部署為 Web App
 6. 部署時權限選「Anyone」才能讓外部腳本呼叫
-7. AI 引擎使用 Google Gemini（免費方案），透過 `google-genai` SDK
+7. AI 引擎使用 Google Gemini（免費方案），透過 `google-genai` SDK。**生成模型預設為 `gemini-2.5-pro`**（env var `GEMINI_MODEL`），flash 僅作為成本敏感備援
 8. Streamlit 密碼存在 `.streamlit/secrets.toml`（已 .gitignore）
+9. `prompts/copywriting.md` 頂端有**輸出格式鐵則**，禁止 AI 回應加「好的」「以下是」等 meta 前綴。修改 prompt 時切勿刪除此區塊
+10. Google Sheet 備份：`scripts/backup_sheets.sh` 建議設 cron `0 3 * * 0` 每週日凌晨執行，保留最近 12 份備份於 `logs/backups/YYYY-MM-DD/`
 
 ## 待開發功能
 
@@ -188,5 +206,9 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 - [x] Web UI（Streamlit 管理介面 + 密碼保護）
 - [x] 回饋系統（評分 + FB 成效追蹤 + few-shot 學習）
 - [x] Facebook Graph API 串接（成效數據自動蒐集）
+- [x] 階段 0/1：升級 Pro + meta 前綴禁止 + 保留原版 + diff 萃取修改原則 + 學習指標 + 備份腳本
+- [ ] 階段 2：修改原則庫（累積/衰減/合併） + A/B 對照 few-shot 注入 + 冷啟動門檻
+- [ ] 階段 3：主題分群 + 風格指紋
+- [ ] 階段 4：Self-critique 迴圈 + 多版本生成 + 多樣性保護
 - [ ] 貼文排程發佈（Facebook Graph API publish）
 - [ ] 圖片素材生成

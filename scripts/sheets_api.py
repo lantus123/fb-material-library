@@ -51,15 +51,16 @@ def _get_spreadsheet() -> gspread.Spreadsheet:
 
 
 def _get_or_create_sheet(name: str, headers: list[str]) -> gspread.Worksheet:
-    """取得或建立工作表，確保有表頭。"""
+    """取得或建立工作表，確保表頭與 headers 一致；允許向後擴欄不動既有資料。"""
     ss = _get_spreadsheet()
     try:
         ws = ss.worksheet(name)
     except gspread.WorksheetNotFound:
         ws = ss.add_worksheet(title=name, rows=100, cols=len(headers))
-    # 確保表頭存在
     first_row = ws.row_values(1)
-    if not first_row or first_row[0] != headers[0]:
+    if first_row != headers:
+        if ws.col_count < len(headers):
+            ws.add_cols(len(headers) - ws.col_count)
         ws.update("A1", [headers])
     return ws
 
@@ -74,7 +75,8 @@ MATERIAL_HEADERS = [
 POST_HEADERS = [
     '生成時間', '素材標題', '素材列號', '貼文類型', '貼文內容',
     '主觀評分', '備註', 'FB貼文ID', '按讚數', '留言數',
-    '分享數', '觸及人數', '最後更新'
+    '分享數', '觸及人數', '最後更新',
+    '原始內容', '修改原因', '修改原則'
 ]
 
 STYLE_HEADERS = [
@@ -239,6 +241,9 @@ def add_post_record(
         0,   # 分享數
         0,   # 觸及人數
         "",  # 最後更新
+        post_content,  # 原始內容（AI 生成版，不可變）
+        "",  # 修改原因
+        "",  # 修改原則
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
     last_row = len(ws.get_all_values())
@@ -252,10 +257,13 @@ def get_post_records(limit: int = 50) -> list[dict]:
     if len(rows) <= 1:
         return []
 
+    n = len(POST_HEADERS)
     records = []
     for idx, row in enumerate(rows[1:], start=2):
-        if len(row) < 13:
-            row.extend([""] * (13 - len(row)))
+        if len(row) < n:
+            row.extend([""] * (n - len(row)))
+        # 舊資料沒有原始內容 → fallback 為當前貼文內容（避免 diff 分析誤判）
+        original = row[13] or row[4]
         records.append({
             "row_number": idx,
             "generated_at": row[0],
@@ -271,6 +279,9 @@ def get_post_records(limit: int = 50) -> list[dict]:
             "shares": int(row[10]) if row[10] and str(row[10]).isdigit() else 0,
             "reach": int(row[11]) if row[11] and str(row[11]).isdigit() else 0,
             "last_updated": row[12],
+            "original_content": original,
+            "edit_reasons": row[14],
+            "edit_principle": row[15],
         })
 
     records.reverse()
@@ -331,10 +342,52 @@ def update_post_rating(row: int, rating: int, notes: str = "") -> bool:
 
 
 def update_post_content(row: int, post_content: str) -> bool:
-    """更新貼文內容（用於儲存手動修改後的版本）。"""
+    """更新貼文內容（用於儲存手動修改後的版本）。不動原始內容欄位。"""
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
     ws.update_cell(row, 5, post_content)
     return True
+
+
+def update_edit_reasons(row: int, reasons: str) -> bool:
+    """更新修改原因標籤（以 | 分隔的字串）。"""
+    ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
+    ws.update_cell(row, 15, reasons)
+    return True
+
+
+def update_edit_principle(row: int, principle: str) -> bool:
+    """寫入 diff 分析產出的修改原則。"""
+    ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
+    ws.update_cell(row, 16, principle)
+    return True
+
+
+def revert_post_to_original(row: int) -> bool:
+    """將貼文內容還原為原始 AI 生成版，同時清空修改原因與原則。"""
+    ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
+    original = ws.cell(row, 14).value or ""
+    if not original:
+        return False
+    ws.update_cell(row, 5, original)
+    ws.update_cell(row, 15, "")
+    ws.update_cell(row, 16, "")
+    return True
+
+
+def get_post_row(row: int) -> dict:
+    """讀單一貼文紀錄（含原版/編輯版），供 diff 分析使用。"""
+    ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
+    values = ws.row_values(row)
+    n = len(POST_HEADERS)
+    if len(values) < n:
+        values.extend([""] * (n - len(values)))
+    return {
+        "row_number": row,
+        "post_content": values[4],
+        "original_content": values[13] or values[4],
+        "edit_reasons": values[14],
+        "edit_principle": values[15],
+    }
 
 
 # ─── 寫法範本 ──────────────────────────────────────────────

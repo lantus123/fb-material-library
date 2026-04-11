@@ -1,4 +1,4 @@
-"""貼文紀錄頁面 — 查看歷史貼文、更新回饋。"""
+"""貼文紀錄頁面 — 查看歷史貼文、更新回饋、分析修改差異。"""
 
 import sys
 from pathlib import Path
@@ -9,12 +9,27 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.sheets_api import get_post_records, update_post_metrics, update_post_rating, update_post_content
+from scripts.sheets_api import (
+    get_post_records,
+    update_post_metrics,
+    update_post_rating,
+    update_post_content,
+    update_edit_reasons,
+    update_edit_principle,
+    revert_post_to_original,
+)
+from scripts.post_generator import analyze_edit_diff
 from pages.auth import require_auth
 
 st.set_page_config(page_title="貼文紀錄", page_icon="📋", layout="wide")
 require_auth()
 st.title("📋 貼文紀錄")
+
+EDIT_REASON_OPTIONS = [
+    "太長", "太短", "太學術", "太口語", "開頭弱", "結尾弱",
+    "CTA不明", "語氣不對", "資訊錯誤", "結構鬆散",
+    "emoji過多", "emoji不足", "hashtag不對", "蹭熱點非學習訊號",
+]
 
 records = get_post_records(limit=50)
 
@@ -32,37 +47,113 @@ for r in records:
     date = str(r.get("generated_at", ""))[:10]
     stars = "⭐" * int(rating) if rating else "未評分"
 
-    # FB 成效摘要
     likes = r.get("likes", 0)
     comments = r.get("comments", 0)
     shares = r.get("shares", 0)
     has_fb = likes or comments or shares
     fb_summary = f"👍{likes} 💬{comments} 🔄{shares}" if has_fb else "尚無FB數據"
 
-    with st.expander(f"{date} | {title} | {post_type} | {stars} | {fb_summary}"):
-        # 貼文內容（可編輯）
-        st.markdown("**貼文內容：**（可直接修改，改好後點「更新貼文內容」）")
-        edited_content = st.text_area(
-            "貼文內容",
-            value=r.get("post_content", ""),
-            height=200,
-            key=f"content_{row}",
-            label_visibility="collapsed",
-        )
-        if edited_content != r.get("post_content", ""):
-            if st.button("💾 更新貼文內容", key=f"update_content_{row}", type="primary"):
-                if update_post_content(row, edited_content):
-                    st.success("✅ 貼文內容已更新，這個版本會成為 AI 學習的範本！")
-                    st.rerun()
-                else:
-                    st.error("❌ 更新失敗")
+    post_content = r.get("post_content", "")
+    original_content = r.get("original_content", "")
+    is_edited = bool(original_content) and original_content.strip() != post_content.strip()
+    edit_marker = "✏️" if is_edited else ""
+
+    with st.expander(f"{edit_marker} {date} | {title} | {post_type} | {stars} | {fb_summary}"):
+        # 原版 / 編輯版 對照
+        if is_edited:
+            st.markdown("**📝 原版 vs 編輯版**")
+            c_orig, c_edit = st.columns(2)
+            with c_orig:
+                st.caption("AI 原版")
+                st.text_area(
+                    "原版",
+                    value=original_content,
+                    height=220,
+                    key=f"orig_{row}",
+                    label_visibility="collapsed",
+                    disabled=True,
+                )
+            with c_edit:
+                st.caption("你的編輯版（可再修改）")
+                edited_content = st.text_area(
+                    "編輯版",
+                    value=post_content,
+                    height=220,
+                    key=f"content_{row}",
+                    label_visibility="collapsed",
+                )
+        else:
+            st.markdown("**貼文內容：**（可直接修改，改好後點「更新貼文內容」）")
+            edited_content = st.text_area(
+                "貼文內容",
+                value=post_content,
+                height=220,
+                key=f"content_{row}",
+                label_visibility="collapsed",
+            )
+
+        # 儲存/退回/分析差異 按鈕列
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
+        with btn_col1:
+            if edited_content != post_content:
+                if st.button("💾 更新貼文內容", key=f"update_content_{row}", type="primary"):
+                    if update_post_content(row, edited_content):
+                        st.success("✅ 已更新")
+                        st.rerun()
+                    else:
+                        st.error("❌ 更新失敗")
+        with btn_col2:
+            if is_edited:
+                if st.button("⟲ 退回原版", key=f"revert_{row}"):
+                    if revert_post_to_original(row):
+                        st.success("✅ 已退回原版")
+                        st.rerun()
+                    else:
+                        st.error("❌ 退回失敗（原版為空）")
+        with btn_col3:
+            if is_edited:
+                if st.button("🔍 分析差異並學習", key=f"analyze_{row}"):
+                    with st.spinner("Gemini 分析中..."):
+                        principle = analyze_edit_diff(
+                            original=original_content,
+                            edited=post_content,
+                            reasons=r.get("edit_reasons", ""),
+                        )
+                        if principle and not principle.startswith("❌"):
+                            update_edit_principle(row, principle)
+                            st.success("✅ 已萃取原則")
+                            st.rerun()
+                        else:
+                            st.error(principle or "❌ 分析失敗")
+
+        # 修改原因標籤 + 已萃取原則
+        if is_edited:
+            existing_reasons = [
+                x for x in (r.get("edit_reasons", "") or "").split("|") if x
+            ]
+            selected_reasons = st.multiselect(
+                "修改原因（可選，幫助 AI 更精準學習；沒空就留空）",
+                EDIT_REASON_OPTIONS,
+                default=[x for x in existing_reasons if x in EDIT_REASON_OPTIONS],
+                key=f"reasons_select_{row}",
+            )
+            new_reasons_str = "|".join(selected_reasons)
+            if new_reasons_str != (r.get("edit_reasons", "") or ""):
+                if st.button("💾 儲存修改原因", key=f"save_reasons_{row}"):
+                    if update_edit_reasons(row, new_reasons_str):
+                        st.success("✅ 原因已儲存")
+                        st.rerun()
+
+            principle = r.get("edit_principle", "")
+            if principle:
+                st.info(f"🧠 **已萃取原則：**\n\n{principle}")
 
         if r.get("notes"):
             st.markdown(f"**備註：** {r['notes']}")
 
         st.divider()
 
-        # 更新評分
+        # 更新評分 + FB 成效
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**更新評分**")
@@ -81,7 +172,6 @@ for r in records:
                 else:
                     st.error("❌ 更新失敗")
 
-        # 更新 FB 成效
         with col2:
             st.markdown("**更新 FB 成效**")
             fb_post_id = st.text_input(

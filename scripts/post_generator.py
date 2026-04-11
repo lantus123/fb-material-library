@@ -19,6 +19,7 @@ GEMINI_MODEL = _get_secret("GEMINI_MODEL", "gemini-2.5-flash")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 COPYWRITING_PROMPT_PATH = PROJECT_ROOT / "prompts" / "copywriting.md"
+DIFF_ANALYSIS_PROMPT_PATH = PROJECT_ROOT / "prompts" / "diff_analysis.md"
 BRAND_PATH = PROJECT_ROOT / "config" / "brand.json"
 
 
@@ -219,5 +220,35 @@ def generate_post(
             contents=prompt,
         )
         return response.text
+    except Exception as e:
+        return f"❌ Gemini API 錯誤：{e}"
+
+
+def analyze_edit_diff(
+    original: str,
+    edited: str,
+    reasons: str = "",
+) -> str:
+    """比對原版與編輯版，萃取一條修改原則。回傳原則文字或錯誤訊息。"""
+    if not original or not edited:
+        return "【無顯著差異】（缺少原版或編輯版）"
+    if original.strip() == edited.strip():
+        return "【無顯著差異】"
+
+    template = DIFF_ANALYSIS_PROMPT_PATH.read_text(encoding="utf-8")
+    prompt = (
+        template
+        .replace("{{original}}", original)
+        .replace("{{edited}}", edited)
+        .replace("{{reasons}}", reasons.strip() or "（未標註）")
+    )
+
+    try:
+        client = get_client()
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+        )
+        return (response.text or "").strip()
     except Exception as e:
         return f"❌ Gemini API 錯誤：{e}"
