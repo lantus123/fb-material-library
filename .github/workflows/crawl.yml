@@ -1,0 +1,42 @@
+name: 自動爬取素材
+
+on:
+  schedule:
+    # 台灣時間 週一、週四 08:00 = UTC 週一、週四 00:00
+    - cron: '0 0 * * 1,4'
+  workflow_dispatch:
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安裝依賴
+        run: pip install -r requirements.txt
+
+      - name: 寫入 Google 服務帳號憑證
+        run: echo "$GOOGLE_CREDENTIALS_JSON" > credentials.json
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+
+      - name: 執行爬取
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+        run: python scripts/crawl.py --scheduled
+
+      - name: 上傳 log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-log-${{ github.run_id }}
+          path: logs/
+          retention-days: 30
+          if-no-files-found: ignore
