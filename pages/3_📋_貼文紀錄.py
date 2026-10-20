@@ -1,6 +1,7 @@
 """貼文紀錄頁面 — 查看歷史貼文、更新回饋、分析修改差異。"""
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -19,6 +20,8 @@ from scripts.sheets_api import (
     revert_post_to_original,
 )
 from scripts.post_generator import analyze_edit_diff
+from scripts.fb_api import TAIPEI, cancel_scheduled, redact_token
+from scripts.publish_ui import render_publish_panel
 from pages.auth import require_auth
 
 st.set_page_config(page_title="貼文紀錄", page_icon="📋", layout="wide")
@@ -58,7 +61,22 @@ for r in records:
     is_edited = bool(original_content) and original_content.strip() != post_content.strip()
     edit_marker = "✏️" if is_edited else ""
 
-    with st.expander(f"{edit_marker} {date} | {title} | {post_type} | {stars} | {fb_summary}"):
+    publish_status = r.get("publish_status", "")
+    publish_time = r.get("publish_time", "")
+    status_label = {
+        "published": "✅ 已發布", "scheduled": "🕒 已排程",
+        "cancelled": "🚫 已取消", "failed": "⚠ 發布失敗",
+    }.get(publish_status, "⬜ 未發布")
+    if publish_status == "scheduled":
+        try:
+            scheduled_time = datetime.fromisoformat(publish_time)
+            if scheduled_time.tzinfo is None:
+                scheduled_time = scheduled_time.replace(tzinfo=TAIPEI)
+            status_label += scheduled_time.astimezone(TAIPEI).strftime(" %m/%d %H:%M")
+        except (ValueError, TypeError):
+            pass
+
+    with st.expander(f"{edit_marker} {date} | {title} | {post_type} | {stars} | {fb_summary} | {status_label}"):
         # 原版 / 編輯版 對照
         if is_edited:
             st.markdown("**📝 原版 vs 編輯版**")
@@ -153,6 +171,30 @@ for r in records:
         if r.get("notes"):
             st.markdown(f"**備註：** {r['notes']}")
 
+        st.divider()
+
+        st.markdown("**📤 發布**")
+        if publish_status in {"published", "scheduled"} and f"publish_result_{row}" in st.session_state:
+            render_publish_panel(row, post_content, key_prefix=f"history_{row}")
+        if publish_status in {"", "cancelled", "failed"}:
+            if edited_content != post_content:
+                st.info("請先更新貼文內容，再預覽並確認發布。")
+            else:
+                render_publish_panel(row, post_content, key_prefix=f"history_{row}")
+        elif publish_status == "scheduled":
+            st.info(redact_token(f"排程時間：{publish_time}"))
+            if st.button("取消排程", key=f"history_{row}_cancel"):
+                try:
+                    if cancel_scheduled(row):
+                        st.session_state.pop(f"publish_result_{row}", None)
+                        st.success("已取消排程")
+                        st.rerun()
+                    else:
+                        st.error("FB 未確認取消成功，請先查看粉專排程")
+                except Exception as exc:
+                    st.error(redact_token(str(exc)))
+        elif publish_status == "published":
+            st.markdown(redact_token(f"[查看 FB 貼文](https://www.facebook.com/{r.get('fb_post_id', '')})"))
         st.divider()
 
         # 更新評分 + FB 成效

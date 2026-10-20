@@ -75,6 +75,22 @@ python scripts/generate_post.py --quick
 | `python scripts/generate_post.py --list` | 列出素材 |
 | `python scripts/generate_post.py --stats` | 查看統計 |
 
+### FB 發布與排程 (fb_api.py)
+
+| 指令 | 說明 |
+|------|------|
+| `python scripts/fb_api.py --publish 12` | 預覽第 12 列全文，確認後立即發布 |
+| `python scripts/fb_api.py --publish 12 --at "2026-11-09 20:00" --image ./photo.jpg` | 排程單圖貼文，時間為台北時區 |
+| `python scripts/fb_api.py --publish 12 --image https://example.com/photo.png --yes` | 明確確認後發布；非互動環境必須有 `--yes` |
+| `python scripts/fb_api.py --scheduled` | 列出粉專排程中貼文 |
+| `python scripts/fb_api.py --cancel 12` | 取消第 12 列的排程 |
+| `python scripts/fb_api.py --refresh` | 更新已有 FB 貼文 ID 的成效 |
+
+在 Streamlit secrets 或本專案 `.env` 設定 `FB_PAGE_ID`、`FB_PAGE_ACCESS_TOKEN`。
+網頁的生成頁儲存後、紀錄頁的「📤 發布」區塊都可操作，必須勾選確認才可發布。
+排程限距現在 10 分鐘至 28 天；範例日期請依執行日調整。沒有自動發布排程器。
+若顯示「已發布但紀錄沒更新」，請依回傳貼文 ID 人工補登，勿重複發布。
+
 ## 爬取來源
 
 ### 自動爬取 — 英文來源（RSS）

@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from scripts.sheets_api import get_materials, mark_used, add_post_record
 from scripts.post_generator import get_client, generate_post
+from scripts.publish_ui import render_publish_panel
 from pages.auth import require_auth
 
 st.set_page_config(page_title="貼文生成", page_icon="✏️", layout="wide")
@@ -22,6 +23,17 @@ if "generated_post" not in st.session_state:
     st.session_state["generated_post"] = ""
 if "selected_materials" not in st.session_state:
     st.session_state["selected_materials"] = []
+
+
+def render_last_saved():
+    row = st.session_state.get("last_saved_row")
+    if row:
+        with st.expander("📤 發布到粉專", expanded=True):
+            st.caption(f"已儲存的貼文紀錄：第 {row} 列")
+            render_publish_panel(
+                row, st.session_state.get("last_saved_content", ""), key_prefix=f"gen_{row}",
+            )
+
 
 # ─── 左欄：素材選擇 ─────────────────────────────────────
 left, right = st.columns([1, 1])
@@ -41,6 +53,7 @@ with left:
 
     if not available:
         st.info("📭 ��有可用素材")
+        render_last_saved()
         st.stop()
 
     # 多選素材
@@ -69,6 +82,7 @@ with left:
 
     if not selected_materials:
         st.info("👆 請選擇至少一篇素材")
+        render_last_saved()
         st.stop()
 
     # 顯示已選素材
@@ -156,6 +170,8 @@ with right:
                 notes=notes,
             )
             if result.get("success"):
+                st.session_state["last_saved_row"] = result["row"]
+                st.session_state["last_saved_content"] = post_content
                 # 標記所有素材為已使用
                 for m in selected_materials:
                     if m.get("row_number"):
@@ -168,3 +184,5 @@ with right:
                 st.session_state["generated_post"] = ""
             else:
                 st.error(f"❌ 儲存失敗：{result.get('error')}")
+
+    render_last_saved()

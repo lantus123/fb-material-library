@@ -107,7 +107,8 @@ POST_HEADERS = [
     '生成時間', '素材標題', '素材列號', '貼文類型', '貼文內容',
     '主觀評分', '備註', 'FB貼文ID', '按讚數', '留言數',
     '分享數', '觸及人數', '最後更新',
-    '原始內容', '修改原因', '修改原則'
+    '原始內容', '修改原因', '修改原則',
+    '發布狀態', '發布時間'
 ]
 
 STYLE_HEADERS = [
@@ -285,6 +286,8 @@ def add_post_record(
         post_content,  # 原始內容（AI 生成版，不可變）
         "",  # 修改原因
         "",  # 修改原則
+        "",  # 發布狀態
+        "",  # 發布時間
     ]
     ws.append_row(row, value_input_option="USER_ENTERED")
     last_row = len(ws.get_all_values())
@@ -322,6 +325,8 @@ def _load_post_records_uncached() -> list[dict]:
             "original_content": original,
             "edit_reasons": row[14],
             "edit_principle": row[15],
+            "publish_status": row[16],
+            "publish_time": row[17],
         })
 
     records.reverse()
@@ -401,6 +406,21 @@ def update_post_metrics(
     return True
 
 
+def update_post_publish(row: int, *, fb_post_id: str, status: str, publish_time: str) -> bool:
+    """寫入發布結果；批次更新保留既有內容與成效欄位。"""
+    if status not in {"published", "scheduled", "cancelled", "failed"}:
+        raise ValueError("無效的發布狀態")
+    ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
+    try:
+        ws.batch_update([
+            {"range": f"H{row}", "values": [[fb_post_id]]},
+            {"range": f"Q{row}:R{row}", "values": [[status, publish_time]]},
+        ], value_input_option="RAW")
+    finally:
+        invalidate_cache("post_records")
+    return True
+
+
 def update_post_rating(row: int, rating: int, notes: str = "") -> bool:
     """更新貼文的主觀評分和備註。"""
     ws = _get_or_create_sheet("貼文紀錄", POST_HEADERS)
@@ -456,6 +476,10 @@ def get_post_row(row: int) -> dict:
         values.extend([""] * (n - len(values)))
     return {
         "row_number": row,
+        "material_row": values[2],
+        "fb_post_id": values[7],
+        "publish_status": values[16],
+        "publish_time": values[17],
         "post_content": values[4],
         "original_content": values[13] or values[4],
         "edit_reasons": values[14],

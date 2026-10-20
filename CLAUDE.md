@@ -56,6 +56,7 @@ fb-material-library/
 │   ├── crawl_scheduled.sh          # 排程爬取（cron 用）
 │   ├── generate_post.py            # CLI 貼文生成
 │   ├── fb_api.py                   # Facebook Graph API 串接
+│   ├── publish_ui.py               # 人工確認發布面板（生成頁／紀錄頁共用）
 │   ├── start_web.sh                # 啟動 Streamlit 腳本
 │   ├── test_model_compare.py       # 一次性：比較不同 Gemini model 的生成品質
 │   └── fb-material-streamlit.service # systemd 服務檔（備用）
@@ -96,6 +97,15 @@ Base URL 存在 `.env` 的 `APPS_SCRIPT_API_URL`
 - `action: "updatePostMetrics"` — 更新 FB 成效數據
 - `action: "updatePostRating"` — 更新評分和備註
 
+### Facebook Graph API（`scripts/fb_api.py`）
+
+- `POST /{page}/feed` — 發布文字貼文（可附連結）。
+- `POST /{page}/photos` — 發布單張圖片（本機上傳或圖片網址）。
+- 上述端點帶 `published=false`、`scheduled_publish_time` 可建立排程。
+- `GET /{page}/scheduled_posts` — 列出排程中貼文。
+- `DELETE /{post_id}` — 取消排程；網頁與 CLI 只允許取消 `scheduled` 紀錄。
+- 既有 `GET /{page}/published_posts`、`GET /{post_id}` 與 `/insights` 維持成效讀取。
+
 ## 如何執行
 
 ### 環境設定
@@ -122,6 +132,10 @@ streamlit run app.py
 - **自架 GCP VM**：http://35.201.163.220:8501
 
 兩者都需要密碼登入。
+
+Streamlit Cloud 要在 secrets 加 `FB_PAGE_ID`、`FB_PAGE_ACCESS_TOKEN`。
+設定於呼叫時讀取，優先使用 Streamlit secrets，再使用本專案 `.env` 環境設定；
+Page Token 需具備 `pages_manage_posts` 權限。未設定時，發布面板只顯示設定提示。
 
 ### 自動爬取
 
@@ -152,12 +166,26 @@ python scripts/generate_post.py --quick      # 快速生成
 python scripts/generate_post.py --stats      # 查看統計
 ```
 
-### FB 成效更新
+### FB 成效更新與發布
 
 ```bash
 python scripts/fb_api.py --refresh    # 批次更新所有 FB 成效
 python scripts/fb_api.py --match      # 自動比對 FB 貼文
+python scripts/fb_api.py --publish 12  # 預覽第 12 列並確認立即發布
+python scripts/fb_api.py --publish 12 --at "2026-11-09 20:00" --image ./photo.jpg
+python scripts/fb_api.py --publish 12 --image https://example.com/photo.png --yes
+python scripts/fb_api.py --scheduled  # 列出排程中貼文（台北時間）
+python scripts/fb_api.py --cancel 12  # 取消第 12 列的排程
 ```
+
+網頁儲存後可立即發布或排程發布，支援單圖，必須先勾「我已看過內容，確認發布」。
+CLI 先印出全文、時間與圖片；沒有 `--yes` 時，TTY 必須回答 `y`，非 TTY 直接以 exit code 2 拒絕。
+排程採台北時間，限距現在 10 分鐘至 28 天（含邊界）；這是依實測採用的保守窗，
+範例日期需依執行日調整。排程交由 Facebook 執行，沒有新增自動發布排程器。
+發文成功但 Sheet 回寫失敗會顯示貼文 ID，請人工補登，不要重發。
+取消排程保留原貼文 ID 與預定時間。發布寫入的 ID 可直接供 `--refresh` 更新成效。
+發布狀態記錄本次操作結果，不會自動輪詢 Facebook 改寫狀態；排程時間已到時，
+取消入口會拒絕刪除，避免把可能已公開的貼文當排程刪掉，請到粉專確認。
 
 ## 回饋系統
 
@@ -189,6 +217,11 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 - `原始內容`（col 14）— AI 生成版本，不可變，作為 diff 分析基準
 - `修改原因`（col 15）— 使用者勾選的標籤，以 `|` 分隔
 - `修改原則`（col 16）— Gemini 分析 diff 後萃取的一條原則（原始 raw 輸出，同步寫入 `修改原則` 工作表）
+- `發布狀態`（col 17）— 空白＝未發布；`published`／`scheduled`／`cancelled`／`failed`
+- `發布時間`（col 18）— ISO 8601；立即發布為當下時間，排程為預定時間，取消保留原排程時間
+
+既有 col 1–16 保持不變；`_get_or_create_sheet` 會在表頭不一致時擴欄並更新整列表頭，
+不需另跑遷移腳本。Apps Script 的 `POST_HEADERS` 同步鏡像，發布邏輯由 Python 處理。
 
 ### 修改原則 Sheet 欄位（階段 2 新增）
 
@@ -236,5 +269,5 @@ python scripts/fb_api.py --match      # 自動比對 FB 貼文
 - [x] 階段 2：修改原則庫（CRUD/衰減/月度合併）+ A/B 對照 few-shot + 冷啟動門檻 + prompt 預算 + 主題平衡
 - [x] 階段 3：風格指紋量化特徵 + 主題分群注入 + TTL cache（避免 gspread 配額爆掉）
 - [ ] 階段 4：Self-critique 迴圈 + 多版本生成 + 多樣性保護
-- [ ] 貼文排程發佈（Facebook Graph API publish）
+- [x] 貼文排程發佈（Facebook Graph API publish）
 - [ ] 圖片素材生成
